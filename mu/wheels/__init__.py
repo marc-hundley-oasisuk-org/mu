@@ -41,7 +41,7 @@ mode_packages = [
     # pygame versions >=2.1.3 have issues in macOS 10.x, so temporarily for
     # Mu release 1.2.1 pin the max version here
     # https://github.com/mu-editor/mu/issues/2423
-    ("pgzero", ("pgzero>=1.2.1", "pygame<2.1.3")),
+    ("pgzero", ("pgzero>=1.2.1", "pygame")),
     # Lock Werkzeug to < 3.0.0: import flask fails, otherwise.
     ("flask", ("flask==2.0.3", "Werkzeug<3.0.0")),
     # The version of ipykernel here should match to the version used by
@@ -136,8 +136,12 @@ def pip_download(dirpath, logger, additional_flags=[]):
         # NB Probably not necessary now that we're using a temp directory
         #
         if process.returncode != 0:
+            output = process.stdout.decode("utf-8", errors="ignore")
+
+            print(output)
+
             raise WheelsDownloadError(
-                "Pip was unable to download %s" % pip_identifiers
+                f"Pip was unable to download {pip_identifiers}\n\n{output}"
             )
 
 
