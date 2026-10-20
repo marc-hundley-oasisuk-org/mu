@@ -858,6 +858,7 @@ class VirtualEnvironment(object):
         before re-raising the error.
         """
         self.create_venv()
+        self.upgrade_runtime_pip()
         self.install_baseline_packages()
         self.register_baseline_packages()
         self.install_jupyter_kernel()
@@ -896,6 +897,32 @@ class VirtualEnvironment(object):
             raise VirtualEnvironmentCreateError(
                 "Unable to create a virtual environment using %s at %s\n%s"
                 % (safe_short_path(sys.executable), self.path, compact(output))
+            )
+
+    def upgrade_runtime_pip(self):
+        """
+        Upgrade pip in the Mu-created runtime using Python's bundled ensurepip.
+
+        This is required because older virtualenv seed packages may install a
+        version of pip that is incompatible with the runtime Python version.
+        """
+        logger.info("Upgrading runtime pip using ensurepip.")
+
+        ok, output = self.run_subprocess(
+            safe_short_path(self.interpreter),
+            "-I",
+            "-m",
+            "ensurepip",
+            "--upgrade",
+            "--default-pip",
+        )
+
+        if ok:
+            logger.info("Runtime pip upgraded successfully.")
+        else:
+            raise VirtualEnvironmentCreateError(
+                "Unable to upgrade pip in the virtual environment at %s\n%s"
+                % (self.path, compact(output))
             )
 
     def install_jupyter_kernel(self):
