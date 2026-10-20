@@ -1,641 +1,436 @@
-# Mu Python 3.15 Port - Progress Report & Build Notes
-# 13/10/2026
+# Mu Modernisation Notes
 
-## Overview
+## Purpose
 
-The objective was to take the archived open-source **Mu** editor and determine whether it could be modernised to run on a contemporary Python version while providing a foundation for future restrictions on imported modules.
+This fork is modernising Mu for continued use with Python 3.15 and a reproducible Windows deployment process.
 
-The upstream project is archived, unmaintained, and officially targets Python 3.5-3.8. 【1-00cfcb】【2-a2d784】
-
-### Result So Far
-
-✅ Mu installs on Python 3.15
-
-✅ Mu starts and displays the GUI
-
-✅ PyQt5 loads successfully
-
-✅ Resource loading has been modernised
-
-✅ Startup reaches the main application
-
-✅ Identified remaining issues in Mu's virtual-environment bootstrap subsystem
-
----
-
-# Repository Setup
-
-## Fork
-
-Created a GitHub fork of:
+The current development branch is:
 
 ```text
-https://github.com/mu-editor/mu
+python315
 ```
 
-The upstream repository is archived and read-only, so all future maintenance must occur in the fork. 【1-00cfcb】
+Python 3.15.0 is an intentional runtime requirement.
+
+The objective is not simply to make Mu launch. The target is a reproducible Windows build in which the editor, Python execution environment, REPL and debugger operate correctly.
 
 ---
 
-# Python Version Modernisation
+## Current status
 
-## Original Limitation
+### Source application
 
-Mu explicitly restricted installation to:
+| Component | Status |
+|---|---|
+| Mu application launch | PASS |
+| Python 3.15 development environment | PASS |
+| Mu-managed runtime creation | PASS |
+| Runtime Python 3.15 | PASS |
+| Runtime pip provisioning | PASS |
+| Editor | PASS |
+| File operations | PASS |
+| Run Python | PASS |
+| Debugger bootstrap | PASS |
+| Breakpoints/debugging | PASS |
+| REPL | FAIL / under investigation |
 
-```python
-python_requires=">=3.5,<3.9"
-```
-
-which corresponds to the published support range in Mu's documentation. 【2-a2d784】
-
-## Change Made
-
-Updated package metadata to allow installation under Python 3.15.
-
-Example:
-
-```python
-python_requires=">=3.5"
-```
-
-or a similar modernised range.
+The source application is substantially functional but is not yet considered fully validated for Python 3.15.
 
 ---
 
-# Dependency Modernisation
+## Development environment
 
-## Original Dependencies
+Current development baseline:
 
-The project contained legacy versions such as:
+- Windows 11
+- Python 3.15.0
+- Repository-local `.venv`
+- Git
+- VS Code
+- PowerShell
 
-```python
-PyQt5==5.13.2
-QScintilla==2.11.3
-PyQtChart==5.13.1
-jupyter-client<6.2
-ipykernel<6
-qtconsole==4.7.7
-```
-
-The maintainers had already identified these as blockers to newer Python support. 【3-e8abdf】【4-9a8b05】
-
-## Updated Dependencies
-
-Updated to modern versions:
-
-```python
-PyQt5>=5.15
-QScintilla>=2.14
-PyQtChart>=5.15
-jupyter-client>=8
-ipykernel>=6
-qtconsole>=5
-pyzmq>=26
-```
-
-This removed the majority of the installation problems.
-
----
-
-# PyQt5-SIP Issue
-
-## Problem
-
-Old dependency:
-
-```python
-PyQt5-sip<=12.13.0
-```
-
-attempted to compile locally.
-
-Result:
-
-```text
-Microsoft Visual C++ 14 required
-```
-
-## Resolution
-
-Removed legacy SIP pinning and relied upon the current PyQt dependency chain.
-
-Modern PyQt wheels install correctly.
-
----
-
-# Resource Loading Migration
-
-## Original Code
-
-```python
-from pkg_resources import (
-    resource_filename,
-    resource_string
-)
-```
-
-Python 3.15 startup failed:
-
-```text
-ModuleNotFoundError:
-pkg_resources
-```
-
-## Resolution
-
-Replaced `pkg_resources` usage with direct filesystem access using:
-
-```python
-from pathlib import Path
-```
-
-Resource paths now resolve via:
-
-```python
-BASE_DIR = Path(__file__).parent
-```
-
-rather than setuptools resource APIs.
-
-### Replacement Example
-
-```python
-from pathlib import Path
-
-BASE_DIR = Path(__file__).parent
-
-IMAGES_DIR = BASE_DIR / "images"
-CSS_DIR = BASE_DIR / "css"
-FONTS_DIR = BASE_DIR / "fonts"
-```
-
-This was the first source-code compatibility fix required for Python 3.15.
-
----
-
-# User Settings Folder
-
-## Problem
-
-Mu expected:
-
-```text
-%LOCALAPPDATA%\python\mu
-```
-
-to exist.
-
-Result:
-
-```text
-FileNotFoundError
-```
-
-## Resolution
-
-Created:
+Mu can be launched from the repository root with:
 
 ```powershell
-mkdir "$env:LOCALAPPDATA\python\mu"
+.\.venv\Scripts\python.exe .\run.py
 ```
-
-or allow installer creation later.
 
 ---
 
-# Wheels Download Subsystem
+## Mu runtime architecture
 
-## Discovery
+Mu uses two separate Python environments.
 
-After startup issues were resolved, Mu reached:
+### Development/application environment
 
-```text
-virtual_environment.py
-```
-
-and attempted to create its internal educational virtual environment.
-
-This uses:
+The repository development environment is:
 
 ```text
-mu/wheels/__init__.py
+<repository>\.venv
 ```
 
-to download predefined packages.
+This environment runs Mu itself during source development.
+
+### Mu-managed user runtime
+
+Mu separately creates a runtime under the user's local application data directory.
+
+Conceptually:
+
+```text
+%LOCALAPPDATA%\python\mu\mu_venv-315-<timestamp>
+```
+
+User Python programs, debugger components and other Python-mode functionality rely on this environment.
+
+This distinction is important. A healthy development `.venv` does not prove that Mu's own runtime provisioning is working.
 
 ---
 
-# Error Handler Bug Found
+## Runtime provisioning restoration
 
-## Original Code
+Mu's normal startup provisioning had previously been disabled in `mu/app.py`.
 
-```python
-"Pip was unable to download %s" % pip_identifiers
-```
-
-Produced:
-
-```text
-TypeError:
-not all arguments converted during string formatting
-```
-
-when multiple package identifiers were supplied.
-
-## Fixed Version
-
-```python
-raise WheelsDownloadError(
-    f"Pip was unable to download {pip_identifiers}"
-)
-```
-
-This exposed the real failure.
-
----
-
-# Pygame / PGZero Failure
-
-Mu attempted to install:
-
-```text
-pgzero>=1.2.1
-pygame<2.1.3
-```
-
-during startup.
-
-The error initially appeared to be a dependency compatibility problem.
-
-However, after fixing logging, the true cause was revealed:
-
-```text
-SSL: CERTIFICATE_VERIFY_FAILED
-```
-
-during package download.
-
----
-
-# Real Root Cause
-
-The real failure was:
-
-```text
-urllib.error.URLError:
-[SSL: CERTIFICATE_VERIFY_FAILED]
-certificate verify failed:
-unable to get local issuer certificate
-```
-
-Therefore:
-
-### Root Cause
-
-Not Mu.
-
-Not Python 3.15.
-
-Instead:
-
-```text
-TLS certificate validation problem
-```
-
-inside the Windows Sandbox environment.
-
----
-
-# Current Working State
-
-To verify the editor itself works, virtual environment creation was temporarily bypassed.
-
-Location:
-
-```python
-mu/app.py
-```
-
-Original:
+The expected call is:
 
 ```python
 venv.ensure_and_create(self.display_text)
 ```
 
-Temporary workaround:
+Restoring this exposed the actual Python 3.15 compatibility issues in Mu's runtime provisioning process.
 
-```python
-# venv.ensure_and_create(self.display_text)
+The runtime creation path is approximately:
+
+```text
+ensure_and_create()
+    |
+    +-- create()
+    |   |
+    |   +-- create_venv()
+    |   +-- upgrade_runtime_pip()
+    |   +-- install_baseline_packages()
+    |   +-- register_baseline_packages()
+    |   +-- install_jupyter_kernel()
+    |
+    +-- ensure()
 ```
-
-Result:
-
-✅ Mu launches
-
-✅ GUI loads
-
-✅ Splash screen completes
-
-✅ Python 3.15 runtime functional
-
-This proves the editor itself is portable.
 
 ---
 
-# Recommended Future Improvements
+## pip compatibility
 
-## Complete Resource Migration
+The version of `virtualenv` used during development initially seeded:
 
-Replace all remaining:
-
-```python
-pkg_resources
+```text
+pip 23.1
 ```
 
-references with:
+into the Mu-managed Python 3.15 runtime.
 
-```python
-importlib.resources
+That version of pip failed under Python 3.15 when processing wheels, including errors involving `WheelDistribution`.
+
+Python 3.15's bundled `ensurepip` was tested and successfully upgraded the runtime to:
+
+```text
+pip 26.2.1
 ```
 
-or
+Mu now upgrades the runtime pip immediately after creating the virtual environment.
 
-```python
-pathlib
+The bootstrap uses:
+
+```text
+python -I -m ensurepip --upgrade --default-pip
 ```
 
-based implementations.
+`--default-pip` is required because Mu expects:
+
+```text
+Scripts\pip.exe
+```
+
+Without that option, Python generated versioned launchers such as:
+
+```text
+pip3.exe
+pip3.15.exe
+```
+
+but no unqualified `pip.exe`.
 
 ---
 
-## Modernise Wheel Package Definitions
+## Pygame and Python 3.15
 
-Update wheel bootstrap packages:
+The original runtime provisioning requests upstream `pygame`.
 
-### Old
+The upstream package selected during testing was `pygame 2.6.1`. No compatible Windows CPython 3.15 wheel was selected, causing pip to fall back to a source distribution.
+
+The source build subsequently attempted to retrieve SDL build dependencies and failed during certificate validation.
+
+This source-build path is not suitable for the managed estate deployment.
+
+### pygame-ce
+
+`pygame-ce 2.5.8` was validated with Python 3.15.
+
+A native Windows CPython 3.15 wheel was successfully retrieved:
+
+```text
+pygame_ce-2.5.8-cp315-cp315-win_amd64.whl
+```
+
+It was installed successfully and exposes the expected import:
 
 ```python
+import pygame
+```
+
+The current baseline therefore uses:
+
+```text
+pygame-ce>=2.5.8
+```
+
+---
+
+## Pygame Zero dependency handling
+
+The metadata from the `pgzero 1.2.1` wheel declares:
+
+```text
+pygame ~=2.0
+numpy
+enum34 ; python_version < "3.4"
+```
+
+Although `pygame-ce` exposes the `pygame` module, its distribution name does not satisfy the `pygame~=2.0` package dependency.
+
+Without intervention, pip attempted to install both:
+
+```text
+pygame-ce
+pygame
+```
+
+The latter returned provisioning to the unsupported Pygame source-build path.
+
+For the controlled Mu baseline, Pygame Zero dependencies are explicitly supplied and automatic dependency resolution is disabled for this group.
+
+The Python 3.15 baseline explicitly includes:
+
+```text
 pgzero>=1.2.1
-pygame<2.1.3
+pygame-ce>=2.5.8
+numpy
 ```
 
-### Proposed
-
-```python
-pgzero
-pygame>=2.6
-```
-
-after compatibility testing.
+`enum34` does not apply to Python 3.15.
 
 ---
 
-## Fix SSL Handling
+## Source validation achieved
 
-Potential options:
+After applying the runtime pip and Pygame Zero dependency changes, Mu successfully:
 
-### Option 1
+- built the managed Python 3.15 runtime;
+- launched from source;
+- ran Python code;
+- opened and saved files;
+- started the debugger;
+- reached breakpoints and completed debugger testing.
 
-Install proper root certificates into Windows Sandbox.
-
-### Option 2
-
-Pre-package wheel files during installer creation.
-
-### Option 3
-
-Remove runtime wheel downloads entirely.
-
-For managed educational deployments, Option 3 is recommended.
+This is a suitable committed checkpoint before addressing the REPL separately.
 
 ---
 
-# Restricting Imports (Future Work)
+## Debugger
 
-The original objective remains fully achievable.
+Manual testing established that Mu's debugger server can run under Python 3.15 and listen on its configured localhost port.
 
-## Static Validation
+Following the runtime provisioning fixes, debugger operation from Mu has been successfully validated.
 
-Before execution:
+Validated:
 
-```python
-import ast
-```
+- debugger bootstrap;
+- debugger connection;
+- breakpoint/debug operation.
 
-Parse imports and compare against an allow-list.
+### `bp_index` robustness issue
 
-Example:
+A separate robustness issue has been identified in the debugger client.
 
-```python
-ALLOWED = {
-    "math",
-    "random",
-    "datetime",
-    "turtle",
-}
-```
-
----
-
-## Runtime Validation
-
-Override imports inside the execution environment:
+`mu/debugger/client.py` accesses:
 
 ```python
-import builtins
-
-_original_import = builtins.__import__
-
-def restricted_import(name, *args, **kwargs):
-    root = name.s***t(".")[0]
-
-    if root not in AL***ED:
-        raise ImportError(
- ***        f"{root} not permitted"
-***     )
-
-    return _original_imp***(
-        name,
-        *args,
- ***    **kwargs
-    )
-
-builtins.__i***rt__ = restricted_import
+self.bp_index
 ```
 
---***# Important Design Principle
+before that member is guaranteed to have been initialised by debugger bootstrap.
 
-Do***not** remove:
-
-```python
-os
-sys
-***process
-pathlib
-```
-
-from Mu its***.
-
-Mu internally depends on many*** these modules.
-
-Restrict them o*** in the interpreter that execute***ser code.
-
----
-
-# Newer Mu Versi***Investigation
-
-During crash hand***g Mu reports:
+This previously produced:
 
 ```text
-There is ***ewer version of Mu available
-```***owever the archived GitHub repos***ry remains at version 1.2.2. 【1-00cfcb】【2-a2d784】
-
-This suggests on***f:
-
-1. The update URL is hardcod***
-2. A release exists outside Git***.
-3. A post-GitHub packaged rele*** was produced.
-4. The update-che***endpoint was never updated.
-
-## ***ure Investigation
-
-Inspect:
-
-```***t
-mu/logic.py
-mu/app.py
-mu/versi***py
+AttributeError: 'Debugger' object has no attribute 'bp_index'
 ```
 
-Search for:
-
-```powershe***findstr /S /I "codewith.mu" *.py***ndstr /S /I "latest version" *.p***indstr /S /I "download" *.py
-```***etermine how update checking is ***formed.
+This issue should remain separate from the runtime provisioning work and should only be modified if it remains reproducible during subsequent validation.
 
 ---
 
-# Building a Windo***Installer
+## REPL
 
-## Recommended Build ***cess
+The REPL remains the principal known Python 3.15 issue.
 
-### Step 1
+The source application can now create its managed runtime and the debugger is operational, significantly narrowing the REPL investigation.
 
-Get the applic***on fully stable.
+REPL work should be performed as a separate change from the completed runtime provisioning remediation.
 
-### Step 2
-
-Cr***e a release tag:
-
-```powershell
-*** tag v1.3.0-custom
-git push --ta***```
-
-### Step 3
-
-Create a standa***e executable using PyInstaller:
-***`powershell
-pip install pyinstal***
-```
-
-Build:
-
-```powershell
-pyin***ller run.py --name MuCustom
-```
-***tput:
+Target validation:
 
 ```text
+REPL starts
+kernel is located
+kernel starts
+input executes
+output returns to Mu
+REPL closes cleanly
+```
+
+The crash report and log from the latest REPL test should be treated as the next primary evidence source.
+
+---
+
+## PyInstaller Windows packaging
+
+The original packaging documentation referenced a `pyinstaller.spec` that was no longer present.
+
+A maintained packaging implementation has been added:
+
+```text
+package\
+    prepare-pyinstaller.ps1
+    pyinstaller.spec
+    PYINSTALLER_BUILD.rst
+```
+
+PyInstaller has successfully completed a Windows build using Python 3.15.
+
+The resulting executable is:
+
+```text
+dist\mu\mu.exe
+```
+
+Previous packaging validation established:
+
+```text
+PyInstaller Analysis       PASS
+PYZ                        PASS
+PKG                        PASS
+EXE                        PASS
+COLLECT                    PASS
+Mu executable launch       PASS
+Qt UI                      PASS
+Editor                     PASS
+Python execution           PASS
+File operations            PASS
+```
+
+That build pre-dated completion of the current runtime-provisioning remediation.
+
+The packaged application must therefore be rebuilt and revalidated after source-level Python 3.15 validation is complete.
+
+See:
+
+```text
+package\PYINSTALLER_BUILD.rst
+```
+
+---
+
+## Windows packaging workflow
+
+From the repository root:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\package\prepare-pyinstaller.ps1
+.\.venv\Scripts\python.exe .\run.py
+.\.venv\Scripts\python.exe -m PyInstaller --noconfirm --clean .\package\pyinstaller.spec
+.\dist\mu\mu.exe
+```
+
+The current build is intentionally a PyInstaller one-directory build. The full `dist\mu` directory is required for distribution and testing.
+
+Do not move to a one-file build until the one-directory build is stable and fully validated.
+
+---
+
+## Git and generated content
+
+Source and build configuration should be retained in Git.
+
+Tracked examples:
+
+```text
+package\pyinstaller.spec
+package\prepare-pyinstaller.ps1
+package\PYINSTALLER_BUILD.rst
+```
+
+Generated content should not be committed.
+
+Ignored/generated examples:
+
+```text
+.venv\
+build\
 dist\
+__pycache__\
+*.pyc
 ```
+
+Mu-generated runtime environments beneath `%LOCALAPPDATA%` are runtime state and are not repository content.
+
+The generated baseline file `mu\wheels\1.2.2.zip` should be reviewed deliberately before committing. It should not be committed automatically merely because a successful local provisioning run created it.
 
 ---
 
-#***eate EXE Installer
+## Validation strategy
 
-## Option A ***nno Setup (Recommended)
+Modernisation work should continue using this controlled sequence:
 
-Generat***
-```text
-MuCustomSetup.exe
-```
+1. Establish the baseline.
+2. Reproduce the issue.
+3. Inspect the actual failure.
+4. Identify the root cause.
+5. Make one targeted change.
+6. Validate from source.
+7. Commit the validated change.
+8. Rebuild packaging only when the source application is stable.
 
-***antages:
-
-- Easy to maintain
-- W***ly supported
-- Small installer
--***itable for schools
-
----
-
-# Creat***SI Installer
-
-## Option B - WiX ***lset
-
-Generate:
-
-```text
-MuCusto***si
-```
-
-Advantages:
-
-- Enterpris***eployment
-- Intune compatible
-- ***M compatible
-- Group Policy depl***ent
-
-For education and enterpris***eployment, MSI via WiX is the preferred long-term option.
+Avoid combining unrelated compatibility fixes into the same commit.
 
 ---
 
-# Suggested Packaging Architecture
+## Current next priority
+
+The next primary investigation is the Python 3.15 REPL failure.
+
+Do not begin final PyInstaller validation until the source validation matrix is complete.
+
+Target source state:
 
 ```text
-Mu-Education
-│
-├── Python 3.15
-├── Import Allow List
-├── Restricted Runtime
-├── Modernised Dependencies
-├── Custom Branding
-├── MSI Installer
-└── Intune/GPO Deployment Support
+Application launch       PASS
+Runtime environment      PASS
+Editor                   PASS
+Run Python               PASS
+File operations          PASS
+REPL                     PENDING
+Debugger bootstrap       PASS
+Breakpoint/debugging     PASS
 ```
 
----
-
-# Current Project Status
-
-| Area | Status |
-|--------|--------|
-| Python 3.15 installation | ✅ |
-| Dependency upgrades | ✅ |
-| PyQt5 upgrade | ✅ |
-| QScintilla upgrade | ✅ |
-| Resource loading fix | ✅ |
-| GUI startup | ✅ |
-| Virtual environment bootstrap | ⚠ Needs work |
-| Wheel package definitions | ⚠ Needs modernisation |
-| SSL handling | ⚠ Environment-specific |
-| Import restrictions | ❌ Not implemented |
-| MSI/EXE packaging | ❌ Not implemented |
-| Python 3.15 viability | ✅ Proven |
-
----
-
-# Summary
-
-The most important conclusion is:
-
-> **Mu itself appears capable of running on Python 3.15 with a relatively small number of code changes.**
-
-The remaining issues are primarily:
-
-1. Virtual-environment bootstrap modernisation.
-2. Runtime package download handling.
-3. Installer creation.
-4. Student-code import restrictions.
-
-The core application, GUI, Qt framework, and editor functionality have already been demonstrated to work under Python 3.15.
+Once the REPL passes, rebuild and validate the Windows distributable.
