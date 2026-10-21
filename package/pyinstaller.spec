@@ -125,6 +125,7 @@ exe = EXE(
 python_runtime_tree = Tree(
     str(python_runtime),
     prefix="python-runtime",
+    excludes=["Doc"],
 )
 
 coll = COLLECT(
