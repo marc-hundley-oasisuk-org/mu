@@ -461,6 +461,7 @@ class VirtualEnvironment(object):
         self.process = Process()
         self._is_windows = sys.platform == "win32"
         self._bin_extension = ".exe" if self._is_windows else ""
+        self.base_interpreter = self._get_base_interpreter()
         self.settings = settings.VirtualEnvironmentSettings()
         self.settings.init()
         dirpath_to_use = (
@@ -471,6 +472,27 @@ class VirtualEnvironment(object):
 
     def __str__(self):
         return "<%s at %s>" % (self.__class__.__name__, self.path)
+
+    def _get_base_interpreter(self):
+        """
+        Return the Python interpreter used to create Mu's managed environment.
+
+        When Mu is frozen on Windows, sys.executable is the Mu application
+        executable rather than a reusable Python interpreter. Use the bundled
+        Python runtime instead.
+        """
+        if self._is_windows and getattr(sys, "frozen", False):
+            application_dir = os.path.dirname(sys.executable)
+            return safe_short_path(
+                os.path.join(
+                    application_dir,
+                    "_internal",
+                    "python-runtime",
+                    "python.exe",
+                )
+            )
+
+        return safe_short_path(sys.executable)
 
     @staticmethod
     def _generate_dirpath():
@@ -858,6 +880,7 @@ class VirtualEnvironment(object):
         before re-raising the error.
         """
         self.create_venv()
+        self.upgrade_runtime_pip()
         self.install_baseline_packages()
         self.register_baseline_packages()
         self.install_jupyter_kernel()
@@ -871,31 +894,50 @@ class VirtualEnvironment(object):
         logger.info("Virtualenv name: {}".format(self.name))
 
         env = dict(os.environ)
-        args = filter(
-            None,
-            (
-                safe_short_path(sys.executable),
+        args = (
+                self.base_interpreter,
                 "-I",
                 "-m",
-                "virtualenv",
-                "-p",
-                safe_short_path(sys.executable),
-                "-q",
-                "" if self._is_windows else "--symlinks",
+                "venv",
                 self.path,
-            ),
-        )
+            )
         ok, output = self.run_subprocess(*args, env=env)
         if ok:
             logger.info(
                 "Created virtual environment using %s at %s",
-                safe_short_path(sys.executable),
+                self.base_interpreter,
                 self.path,
             )
         else:
             raise VirtualEnvironmentCreateError(
                 "Unable to create a virtual environment using %s at %s\n%s"
-                % (safe_short_path(sys.executable), self.path, compact(output))
+                % (self.base_interpreter, self.path, compact(output))
+            )
+
+    def upgrade_runtime_pip(self):
+        """
+        Upgrade pip in the Mu-created runtime using Python's bundled ensurepip.
+
+        This is required because older virtualenv seed packages may install a
+        version of pip that is incompatible with the runtime Python version.
+        """
+        logger.info("Upgrading runtime pip using ensurepip.")
+
+        ok, output = self.run_subprocess(
+            safe_short_path(self.interpreter),
+            "-I",
+            "-m",
+            "ensurepip",
+            "--upgrade",
+            "--default-pip",
+        )
+
+        if ok:
+            logger.info("Runtime pip upgraded successfully.")
+        else:
+            raise VirtualEnvironmentCreateError(
+                "Unable to upgrade pip in the virtual environment at %s\n%s"
+                % (self.path, compact(output))
             )
 
     def install_jupyter_kernel(self):
@@ -907,7 +949,7 @@ class VirtualEnvironment(object):
         display_name = '"Python/Mu ({})"'.format(kernel_name)
         logger.info("Installing Jupyter Kernel: %s", kernel_name)
         ok, output = self.run_subprocess(
-            safe_short_path(sys.executable),
+            safe_short_path(self.interpreter),
             "-I",
             "-m",
             "ipykernel",

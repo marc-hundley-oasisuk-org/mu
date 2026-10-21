@@ -26,7 +26,7 @@ from mu.interface.panes import CHARTS
 from ..virtual_environment import venv
 from qtconsole.manager import QtKernelManager
 from qtconsole.client import QtKernelClient
-from PyQt5.QtCore import QObject, QThread, pyqtSignal
+from PyQt5.QtCore import QObject, QThread, Qt, pyqtSignal
 
 
 logger = logging.getLogger(__name__)
@@ -112,6 +112,7 @@ class KernelRunner(QObject):
             self.repl_kernel_manager, self.repl_kernel_client
         )
 
+        
     def stop_kernel(self):
         """
         Clean up the context, stop the client connections to the kernel, affect
@@ -123,6 +124,7 @@ class KernelRunner(QObject):
         self.repl_kernel_client.stop_channels()
         self.repl_kernel_manager.shutdown_kernel(now=True)
         self.kernel_finished.emit()
+
 
 
 class PythonMode(BaseMode):
@@ -271,6 +273,7 @@ class PythonMode(BaseMode):
         self.editor.mode = "debugger"
         self.editor.modes["debugger"].start()
 
+
     def toggle_repl(self, event):
         """
         Toggles the REPL on and off
@@ -303,7 +306,7 @@ class PythonMode(BaseMode):
         )
         self.kernel_runner.moveToThread(self.kernel_thread)
         self.kernel_runner.kernel_started.connect(self.on_kernel_start)
-        self.kernel_runner.kernel_finished.connect(self.kernel_thread.quit)
+        self.kernel_runner.kernel_finished.connect(self.kernel_thread.quit, Qt.DirectConnection)
         self.stop_kernel.connect(self.kernel_runner.stop_kernel)
         self.kernel_thread.started.connect(self.kernel_runner.start_kernel)
         self.kernel_thread.finished.connect(self.on_kernel_stop)
@@ -385,3 +388,14 @@ class PythonMode(BaseMode):
         self.set_buttons(repl=True, plotter=True, run=True)
         self.editor.show_status_message(_("REPL stopped."))
         self.kernel_runner = None
+
+
+    def stop(self):
+        """
+        Stop any active Python process or Jupyter REPL before Mu exits.
+        """
+        if self.kernel_runner:
+            self.remove_repl()
+            self.kernel_thread.wait()
+        elif self.runner:
+            self.stop_script()

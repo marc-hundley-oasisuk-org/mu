@@ -1,36 +1,24 @@
-"""
-Copyright (c) 2015-2017 Nicholas H.Tollervey and others (see the AUTHORS file).
+from pathlib import Path
 
-Based upon work done for Puppy IDE by Dan Pope, Nicholas Tollervey and Damien
-George.
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
-"""
-from pkg_resources import resource_filename, resource_string
 from PyQt5.QtGui import QPixmap, QIcon, QMovie
 from PyQt5.QtCore import QDir
+
 import os
 
 
-# The following lines add the images and css directories to the search path.
-QDir.addSearchPath("images", resource_filename(__name__, "images"))
-QDir.addSearchPath("css", resource_filename(__name__, "css"))
+BASE_DIR = Path(__file__).parent
+
+IMAGES_DIR = BASE_DIR / "images"
+CSS_DIR = BASE_DIR / "css"
+FONTS_DIR = BASE_DIR / "fonts"
+
+QDir.addSearchPath("images", str(IMAGES_DIR))
+QDir.addSearchPath("css", str(CSS_DIR))
 
 
 def path(name, resource_dir="images/", ext=""):
-    """Return the filename for the referenced image."""
-    return resource_filename(__name__, resource_dir + name + ext)
+    """Return the filename for the referenced resource."""
+    return str(BASE_DIR / resource_dir / f"{name}{ext}")
 
 
 def load_icon(name):
@@ -58,11 +46,11 @@ def load_movie(name):
 
 def load_stylesheet(name):
     """Load a CSS stylesheet from the resources directory."""
-    return resource_string(__name__, "css/" + name).decode("utf8")
+    css_file = CSS_DIR / name
+    return css_file.read_text(encoding="utf-8")
 
 
 def load_font_data(name):
-    """
-    Load the (binary) content of a font as bytes
-    """
-    return resource_string(__name__, "fonts/" + name)
+    """Load font bytes."""
+    font_file = FONTS_DIR / name
+    return font_file.read_bytes()
