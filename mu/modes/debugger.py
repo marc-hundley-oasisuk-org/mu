@@ -19,6 +19,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import logging
 import os
 
+from mu.student_policy import POLICY_ENV_VAR
+
 from .base import BaseMode
 from ..debugger.config import DEBUGGER_PORT
 from ..debugger.client import Debugger
@@ -119,7 +121,8 @@ class DebugMode(BaseMode):
                 self.editor.save_tab_to_file(tab)
             logger.debug(tab.text())
             self.set_buttons(modes=False)
-            envars = self.editor.envars
+            envars = dict(self.editor.envars)
+            envars[POLICY_ENV_VAR] = "1"
             cwd = os.path.dirname(tab.path)
             self.runner = self.view.add_python3_runner(
                 venv.interpreter, tab.path, cwd, debugger=True, envars=envars

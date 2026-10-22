@@ -9,6 +9,7 @@ import tempfile
 import time
 import zipfile
 
+
 try:
     import win32api
 except ImportError:
@@ -26,6 +27,8 @@ from . import wheels
 from . import settings
 from . import config
 from . import __version__ as mu_version
+
+from mu import student_policy
 
 wheels_dirpath = os.path.dirname(wheels.__file__)
 
@@ -754,6 +757,7 @@ class VirtualEnvironment(object):
         self.ensure_interpreter_version()
         self.ensure_pip()
         self.ensure_key_modules()
+        self.install_student_policy()
 
     def ensure_path(self):
         """
@@ -873,6 +877,68 @@ class VirtualEnvironment(object):
                 "Pip not found where expected at: %s" % self.pip_executable
             )
 
+    def student_policy_purelib(self):
+        """
+        Return the purelib path for the managed Python environment.
+        """
+        ok, output = self.run_subprocess(
+            self.interpreter,
+            "-c",
+            "import sysconfig; print(sysconfig.get_path('purelib'))",
+        )
+
+        if not ok:
+            raise VirtualEnvironmentEnsureError(
+                "Unable to determine managed Python purelib path:\n%s"
+                % compact(output)
+            )
+
+        return compact(output).strip()
+
+    def install_student_policy(self):
+        """
+        Install the student import policy and startup bootstrap into the
+        managed Python environment.
+        """
+        purelib = self.student_policy_purelib()
+
+        if not os.path.isdir(purelib):
+            raise VirtualEnvironmentEnsureError(
+                "Managed Python purelib path does not exist: %s" % purelib
+            )
+
+        policy_path = os.path.join(purelib, "mu_student_policy.py")
+        bootstrap_path = os.path.join(purelib, "sitecustomize.py")
+
+        policy_source_path = os.path.join(
+            os.path.dirname(student_policy.__file__),
+            "student_policy.py",
+        )
+
+        if not os.path.isfile(policy_source_path):
+            raise VirtualEnvironmentEnsureError(
+                "Student import policy source not found: %s"
+                % policy_source_path
+            )
+
+        with open(policy_source_path, "r", encoding="utf-8") as source_file:
+            policy_source = source_file.read()
+
+        bootstrap_source = (
+            "from mu_student_policy import install_import_hook\n"
+            "\n"
+            "install_import_hook()\n"
+        )
+
+        with open(policy_path, "w", encoding="utf-8") as policy_file:
+            policy_file.write(policy_source)
+
+        with open(bootstrap_path, "w", encoding="utf-8") as bootstrap_file:
+            bootstrap_file.write(bootstrap_source)
+
+        logger.info("Installed student import policy at: %s", policy_path)
+        logger.info("Installed student policy bootstrap at: %s", bootstrap_path)
+
     def create(self):
         """Create a new virtualenv and install baseline packages & kernel
 
@@ -884,6 +950,7 @@ class VirtualEnvironment(object):
         self.install_baseline_packages()
         self.register_baseline_packages()
         self.install_jupyter_kernel()
+        self.install_student_policy()
         self.settings["mu_version"] = mu_version
 
     def create_venv(self):
