@@ -1,0 +1,21 @@
+{
+  "$schema": "https://www.masterpackager.com/support-master-packager-dev/mpdev-schema.json",
+  "outputTypes": [
+    "msi"
+  ],
+  "outputDirectory": "release",
+  "packageName": "Mu Editor",
+  "publisher": "Oasis Community Learning",
+  "version": "1.3.0",
+  "platform": "x64",
+  "installDir": "%ProgramFiles%\\Oasis\\Mu",
+  "fileSystemEntries": [
+    {
+      "sourcePath": "dist\\mu",
+      "targetPath": "$.installDir"
+    }
+  ],
+  "msi": {
+    "upgradeCode": "{84B5999E-CBE3-44E3-812D-2002DE81AD2D}"
+  }
+}
