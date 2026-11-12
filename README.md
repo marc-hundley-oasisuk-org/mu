@@ -1,31 +1,98 @@
-# Mu: Python 3.15 Modernisation Fork
+# Mu: Python 3.15 Education Fork
 
-This repository is a maintained fork of Mu, a simple Python code editor designed for beginner programmers.
+This repository is a maintained education-focused fork of Mu, a simple Python code editor designed for beginner programmers.
 
-The upstream Mu project is no longer maintained. This fork is being modernised for continued use, with the current development branch focused on Python 3.15 and Windows deployment.
+The fork has been modernised for Python 3.15 and Windows deployment and includes additional controls intended for managed school environments.
 
-**Current development branch:** `python315`
+The objective is not to reproduce unrestricted upstream Mu behaviour. The project provides a maintainable educational Python environment with curriculum restrictions and administrator-controlled levels of editor assistance.
 
 ## Project status
 
-The Python 3.15 work is under active development and validation. It should not yet be considered a production release.
+The current Python 3.15 Windows architecture has been functionally validated.
 
-Current validation status:
+Current status:
 
 - Python 3.15.0 development environment: working
 - Mu application launch from source: working
 - Mu-managed Python 3.15 runtime provisioning: working
-- Runtime pip provisioning: working
+- `ensurepip` and runtime pip provisioning: working
 - Editor operations: working
 - File open/save operations: working
 - Python execution: working
-- Debugger bootstrap: working
-- Breakpoints/debugging: working
-- REPL: known issue under investigation
-- Windows PyInstaller build: working at the basic packaging level
-- Packaged Python 3.15 runtime validation: requires completion after source validation is finished
+- Debugger launch and connection: working
+- Breakpoints, Step and Continue: working
+- REPL startup and execution: working
+- REPL close and reopen: working
+- Windows PyInstaller one-directory build: working
+- Packaged Python 3.15 base runtime: working
+- Clean managed-runtime provisioning from the packaged application: working
+- Student import-policy provisioning: working
+- Student import-policy enforcement across Run, Debug and REPL: working
+- Exam editor restrictions: working
+- Teaching editor assistance profile: working
+- Build-time Exam/Teaching profile selection: working
+- Packaged profile immutability: validated
 
-The current engineering priority is to resolve the REPL issue and complete source-level Python 3.15 compatibility before final validation of the distributable Windows build.
+## Educational security model
+
+The student import policy is a mandatory control in this fork.
+
+Permitted direct student imports currently include:
+
+```text
+math
+random
+time
+turtle
+```
+
+Direct access to modules outside the curriculum allow-list is restricted across Run, Debug and REPL.
+
+The project supports two editor-assistance profiles.
+
+### Exam
+
+Exam is the default and fail-safe build profile.
+
+It disables:
+
+- Check
+- Tidy
+- F2 and F10 routes to those features
+- autocomplete
+- API call tips and signatures
+- unclosed-string visual assistance
+- brace-matching assistance
+
+Normal syntax colouring, Run, Debug and REPL remain available.
+
+### Teaching
+
+Teaching must be explicitly selected by a systems administrator at build time.
+
+It restores:
+
+- Check and Tidy
+- their keyboard shortcuts
+- autocomplete
+- API call tips
+- syntax-error visual assistance
+- brace matching
+
+The mandatory student import policy remains enforced in Teaching builds.
+
+The selected profile is frozen into the packaged application. A deployed user cannot convert an Exam package into Teaching by setting `MU_BUILD_PROFILE`.
+
+## Project documentation
+
+The current project documentation is:
+
+- `Modernisation_notes.md` - historical engineering and modernisation notes.
+- `docs/PROJECT_STATUS.md` - current architecture, completed work and project status.
+- `docs/student_import_policy.md` - curriculum import-policy design and implementation.
+- `docs/EXAM_TEACHING_PROFILES.md` - Exam and Teaching profile design, controls and validation.
+- `package/BUILD_AND_RELEASE.md` - end-to-end build, validation and release procedure.
+- `package/PYINSTALLER_BUILD.md` - detailed Windows PyInstaller architecture and engineering guidance.
 
 ## Python 3.15 runtime
 
@@ -40,23 +107,23 @@ The Python 3.15 modernisation work restores Mu's runtime provisioning process an
 
 Current changes include:
 
-- Runtime provisioning through `venv.ensure_and_create()`.
-- Python 3.15 virtual environment creation.
-- Runtime pip bootstrapping using Python's bundled `ensurepip`.
-- Runtime pip upgrade to a Python 3.15-compatible version.
-- Creation of the default `pip.exe` launcher expected by Mu.
-- Use of `pygame-ce` for Python 3.15 Pygame compatibility.
-- Controlled Pygame Zero dependency handling to avoid attempting to build an incompatible upstream Pygame release from source.
+- runtime provisioning through `venv.ensure_and_create()`;
+- Python 3.15 virtual environment creation;
+- runtime pip bootstrapping using Python's bundled `ensurepip`;
+- runtime pip upgrade to a Python 3.15-compatible version;
+- creation of the default `pip.exe` launcher expected by Mu;
+- use of `pygame-ce` for Python 3.15 Pygame compatibility;
+- controlled Pygame Zero dependency handling to avoid attempting to build an incompatible upstream Pygame release from source.
 
 ## Development setup
 
-The current supported development target for this branch is:
+The current supported development target is:
 
 - Windows 11
 - Python 3.15.0
 - Git
 - PowerShell
-- A repository-local Python virtual environment
+- a repository-local Python virtual environment
 
 After cloning the repository, create and prepare the development virtual environment as required by the project.
 
@@ -66,92 +133,95 @@ Mu can then be launched from the repository root with:
 .\.venv\Scripts\python.exe .\run.py
 ```
 
-Python 3.15 is an intentional requirement for this branch. Compatibility issues should be investigated rather than worked around by downgrading the runtime.
+Python 3.15 is an intentional requirement. Compatibility issues should be investigated rather than worked around by downgrading the runtime.
 
 ## Windows distributable build
 
-A maintained PyInstaller configuration is included for producing a distributable Windows build.
-
-Relevant files:
+Windows packaging is controlled through:
 
 ```text
 package\prepare-pyinstaller.ps1
 package\pyinstaller.spec
-package\PYINSTALLER_BUILD.rst
 ```
 
-Basic build sequence from PowerShell:
+The build process supports two administrator-selected profiles.
+
+### Exam build
+
+Exam is the default:
 
 ```powershell
-Set-ExecutionPolicy -Scope Process Bypass
-
 .\package\prepare-pyinstaller.ps1
-
-.\.venv\Scripts\python.exe .\run.py
-
-.\.venv\Scripts\python.exe -m PyInstaller `
-    --noconfirm `
-    --clean `
-    .\package\pyinstaller.spec
 ```
 
-The resulting application is created under:
+It may also be selected explicitly:
+
+```powershell
+.\package\prepare-pyinstaller.ps1 -BuildProfile Exam
+```
+
+### Teaching build
+
+Teaching must be explicitly requested:
+
+```powershell
+.\package\prepare-pyinstaller.ps1 -BuildProfile Teaching
+```
+
+The preparation script:
+
+- selects and reports the requested profile;
+- prepares the repository-local build environment;
+- updates pip, setuptools and wheel;
+- installs Mu into the build environment;
+- ensures PyInstaller is available;
+- invokes PyInstaller;
+- verifies that the packaged executable was created;
+- removes temporary build-profile environment state when complete or when the build fails.
+
+A successful build produces:
 
 ```text
 dist\mu\mu.exe
 ```
 
-The current packaging model is a PyInstaller one-directory build. This is deliberate while Python 3.15 compatibility is still being validated because it makes application resources, Python components and subprocess behaviour easier to inspect.
+Mu uses the PyInstaller one-directory model. The complete `dist\mu\` directory is the distributable application and must be kept together.
 
-See `package/PYINSTALLER_BUILD.rst` for the full Windows build and validation procedure.
+The packaged application includes an independent Python 3.15 base runtime used to provision Mu's per-user managed Python environment.
 
-A successful PyInstaller build does not by itself establish that Mu is ready for deployment. The packaged application's editor, managed runtime, REPL and debugger must also pass validation.
+The selected Exam or Teaching profile is frozen into the packaged application at build time. Runtime environment variables do not change the profile of an already-built application.
 
-## Known issues
+See:
 
-### REPL
+```text
+package\PYINSTALLER_BUILD.md
+package\BUILD_AND_RELEASE.md
+```
 
-The Python REPL is not yet considered working under the current Python 3.15 implementation.
-
-REPL remediation should remain separate from the completed runtime provisioning work so that each compatibility change can be independently tested and reviewed.
-
-### Packaging
-
-PyInstaller has successfully produced a Windows executable under Python 3.15.
-
-Final packaged validation will be repeated after the remaining source-level Python 3.15 issues are resolved.
+for the detailed Windows build, architecture and validation procedures.
 
 ## Validation approach
 
 Changes to this fork follow a validation-first process:
 
 1. Establish a clean baseline.
-2. Reproduce and inspect the failure.
-3. Identify the exact compatibility issue.
+2. Reproduce and inspect the failure or requirement.
+3. Identify the exact compatibility or control point.
 4. Make one targeted change.
 5. Validate the source application.
 6. Commit the validated change.
-7. Rebuild the packaged application when the source baseline is stable.
+7. Rebuild and validate the packaged application when the source baseline is stable.
 
-This is intended to keep the modernisation work auditable and minimise unrelated changes.
-
-## Repository documentation
-
-- `Modernisation_notes.md`: current modernisation state and technical notes.
-- `package/PYINSTALLER_BUILD.rst`: Windows PyInstaller build procedure.
-- `docs/`: original Mu developer and architecture documentation.
-- `CONTRIBUTING.rst`: contributor information.
-- `CHANGES.rst`: upstream project change history.
-- `ROADMAP.rst`: upstream roadmap information.
+This keeps the modernisation and education-control work auditable and minimises unrelated changes.
 
 ## Upstream Mu
 
 Mu is a modal Python editor originally designed around feedback from teachers and learners, with modes supporting different Python environments and devices.
 
-This repository retains the original Mu source, documentation, licence and attribution while providing the additional work required for this maintained fork.
+This repository retains the original Mu source, documentation, licence and attribution while providing the additional work required for this maintained education-focused fork.
 
-- [Original Mu website](https://codewith.mu/)
-- [Original Mu developer documentation](https://mu.readthedocs.io/)
+- Original Mu website: https://codewith.mu/
+- Original Mu developer documentation: https://mu.readthedocs.io/
 
 ## Licence and attribution
 

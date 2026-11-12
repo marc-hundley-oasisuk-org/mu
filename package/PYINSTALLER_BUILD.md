@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document describes the maintained Windows packaging process for the Python 3.15 Mu fork.
+This document describes the maintained Windows packaging process for the Python 3.15 education-focused Mu fork.
 
 The maintained packaging implementation is:
 
@@ -12,7 +12,7 @@ package\pyinstaller.spec
 package\PYINSTALLER_BUILD.md
 ```
 
-The objective is a reproducible, redistributable Windows build of Mu using Python 3.15.
+The objective is a reproducible, redistributable Windows build of Mu using Python 3.15 with mandatory curriculum import restrictions and an administrator-selected Exam or Teaching editor profile.
 
 Python 3.15.0 is mandatory for the current project.
 
@@ -42,9 +42,12 @@ The current packaged application has been functionally validated for:
 - REPL close and reopen;
 - clean application shutdown with an active REPL;
 - student import-policy provisioning;
-- student import-policy enforcement across Run, Debug and REPL.
+- student import-policy enforcement across Run, Debug and REPL;
+- Exam build-profile behaviour;
+- Teaching build-profile behaviour;
+- packaged profile immutability against runtime `MU_BUILD_PROFILE` changes.
 
-The Python 3.15 and student import-policy architecture is therefore the current known-good Windows packaging baseline.
+The Python 3.15, student import-policy and Exam/Teaching architecture is therefore the current known-good Windows packaging baseline.
 
 ---
 
@@ -83,13 +86,44 @@ The authoritative PyInstaller specification is:
 package\pyinstaller.spec
 ```
 
-The preparation script is:
+The supported build entry point is:
 
 ```text
 package\prepare-pyinstaller.ps1
 ```
 
 Both must remain tracked in Git.
+
+Build-profile behaviour is implemented across:
+
+```text
+mu\config.py
+package\prepare-pyinstaller.ps1
+package\pyinstaller.spec
+```
+
+`mu\config.py` defaults to Exam when no frozen build profile is present.
+
+`package\prepare-pyinstaller.ps1` accepts only:
+
+```text
+Exam
+Teaching
+```
+
+and defaults to Exam.
+
+`package\pyinstaller.spec` freezes the selected profile into the application using a generated PyInstaller runtime hook.
+
+The generated runtime hook belongs under:
+
+```text
+build\
+```
+
+and must not be committed to Git.
+
+The student import policy is deliberately independent of this mechanism and remains mandatory in all supported builds.
 
 Generated directories must not be treated as source artefacts:
 
@@ -100,7 +134,7 @@ dist\
 
 ---
 
-## Preparation
+## Preparation and build profiles
 
 Open PowerShell in the repository root.
 
@@ -110,37 +144,84 @@ If required for the current PowerShell process:
 Set-ExecutionPolicy -Scope Process Bypass
 ```
 
-Run the preparation script:
+The Windows build supports two administrator-selected editor-assistance profiles:
+
+```text
+Exam
+Teaching
+```
+
+The student import policy is mandatory in both profiles and is not controlled by profile selection.
+
+### Exam build
+
+Exam is the default and fail-safe profile:
 
 ```powershell
 .\package\prepare-pyinstaller.ps1
 ```
 
-The preparation script:
-
-- updates pip, setuptools and wheel;
-- installs Mu into the development environment in editable mode;
-- ensures PyInstaller is installed;
-- checks the exit code of each critical native command;
-- terminates with an error instead of reporting success if a critical preparation command fails.
-
-Before packaging, confirm that Mu starts correctly from source:
+It may also be selected explicitly:
 
 ```powershell
-.\.venv\Scripts\python.exe .\run.py
+.\package\prepare-pyinstaller.ps1 -BuildProfile Exam
 ```
 
-Do not proceed with packaging when the source application is known to be failing.
+Exam produces:
+
+```text
+Student Import Policy : Enabled (mandatory)
+Check                 : Disabled
+Tidy                  : Disabled
+Code Assistance       : Disabled
+```
+
+### Teaching build
+
+Teaching must be selected explicitly:
+
+```powershell
+.\package\prepare-pyinstaller.ps1 -BuildProfile Teaching
+```
+
+Teaching produces:
+
+```text
+Student Import Policy : Enabled (mandatory)
+Check                 : Enabled
+Tidy                  : Enabled
+Code Assistance       : Enabled
+```
+
+### Build behaviour
+
+`prepare-pyinstaller.ps1` performs both environment preparation and the PyInstaller build.
+
+The script:
+
+- selects the requested build profile;
+- reports the effective configuration;
+- creates the repository-local `.venv` when required;
+- updates pip, setuptools and wheel;
+- installs Mu into the build environment in editable mode;
+- ensures PyInstaller is installed;
+- checks the exit code of each critical native command;
+- invokes `package\pyinstaller.spec`;
+- verifies that `dist\mu\mu.exe` was created;
+- terminates with an error when a critical preparation or build command fails;
+- removes the temporary `MU_BUILD_PROFILE` environment value when complete or when the build fails.
+
+The selected profile is frozen into the packaged application through a PyInstaller runtime hook.
+
+`MU_BUILD_PROFILE` is a build-process input and not a deployed application setting. Changing this environment variable when launching an already-built application does not change its packaged profile.
+
+Before packaging, source behaviour should already have been validated.
+
+Do not proceed with release packaging when the source application is known to be failing.
 
 ### Packaging metadata
 
-The repository uses:
-
-```text
-README.md
-```
-
-as the project README.
+The repository uses `README.md` as the project README.
 
 `setup.py` must therefore use `README.md` for the package long description rather than the obsolete root `README.rst` reference.
 
@@ -154,6 +235,14 @@ text/markdown
 
 ## Build
 
+The supported Windows build entry point is:
+
+```powershell
+.\package\prepare-pyinstaller.ps1
+```
+
+Do not normally invoke PyInstaller directly because the preparation script controls the build profile supplied to `package\pyinstaller.spec`.
+
 Before rebuilding, check whether a previous packaged Mu or related Python process is still running:
 
 ```powershell
@@ -165,33 +254,17 @@ Do not indiscriminately terminate unrelated Python processes.
 
 A running process can keep files within `dist` locked and cause PyInstaller `COLLECT` to fail with an access-denied error.
 
-Clean previous build output:
+The preparation script invokes PyInstaller using `--noconfirm` and `--clean`.
 
-```powershell
-Remove-Item .\build -Recurse -Force -ErrorAction SilentlyContinue
-Remove-Item .\dist -Recurse -Force -ErrorAction SilentlyContinue
-```
-
-Confirm that the previous output has been removed before rebuilding.
-
-From the repository root run:
-
-```powershell
-.\.venv\Scripts\python.exe -m PyInstaller `
-    --noconfirm `
-    --clean `
-    .\package\pyinstaller.spec
-```
-
-A successful build should create:
+A successful build creates:
 
 ```text
 dist\mu\mu.exe
 ```
 
-The complete `dist\mu` directory is the distributable application.
+The complete `dist\mu\` directory is the distributable application.
 
-Do not copy only `mu.exe` out of this directory. The current PyInstaller build uses the one-directory model and requires supporting files under `dist\mu`.
+Do not copy only `mu.exe` out of this directory. The current PyInstaller build uses the one-directory model and requires the supporting files under `dist\mu`.
 
 ---
 
@@ -240,27 +313,9 @@ Do not move to a one-file build while the current packaging architecture is bein
 
 A frozen PyInstaller `mu.exe` cannot be treated as a general-purpose Python interpreter.
 
-When Mu is running from source:
+When Mu is running from source, `sys.executable` is a suitable base interpreter.
 
-```text
-sys.executable
-```
-
-is a suitable base interpreter.
-
-When Mu is frozen with PyInstaller:
-
-```text
-sys.executable
-```
-
-refers to:
-
-```text
-mu.exe
-```
-
-and cannot be used to create Mu's managed Python environment.
+When Mu is frozen with PyInstaller, `sys.executable` refers to `mu.exe` and cannot be used to create Mu's managed Python environment.
 
 The packaged application therefore includes an independent Python 3.15 base installation.
 
@@ -499,6 +554,8 @@ The policy applies consistently to:
 - Debug;
 - REPL.
 
+The policy is mandatory in both Exam and Teaching builds.
+
 ### Policy architecture
 
 The authoritative implementation is:
@@ -509,11 +566,7 @@ mu\student_policy.py
 
 The PyInstaller distribution must retain this as a physical data file.
 
-`package\pyinstaller.spec` therefore explicitly includes:
-
-```text
-mu\student_policy.py
-```
+`package\pyinstaller.spec` therefore explicitly includes `mu\student_policy.py`.
 
 Expected packaged location:
 
@@ -538,11 +591,7 @@ Enforcement occurs only when:
 MU_STUDENT_IMPORT_POLICY=1
 ```
 
-The variable is applied specifically to student:
-
-- Run;
-- Debug;
-- REPL.
+The variable is applied specifically to student Run, Debug and REPL execution.
 
 Runtime provisioning, `ensurepip`, pip operations, baseline package installation, baseline package validation and Jupyter kernel registration remain unrestricted.
 
@@ -639,6 +688,32 @@ Their presence should be checked when packaging changes affect PyInstaller data 
 ## Current packaged validation
 
 The current Python 3.15 packaged architecture has passed the following functional validation.
+
+### Build profiles
+
+The packaged profile mechanism has been validated for both supported profiles.
+
+#### Exam validation
+
+- [x] Exam is the default when no profile argument is supplied
+- [x] Check is unavailable
+- [x] Tidy is unavailable
+- [x] autocomplete and API call tips are unavailable
+- [x] unclosed-string visual assistance is suppressed
+- [x] brace-matching assistance is disabled
+- [x] student import policy remains enforced
+- [x] setting `MU_BUILD_PROFILE=Teaching` at runtime does not alter the packaged Exam profile
+
+#### Teaching validation
+
+- [x] Teaching requires explicit build-time selection
+- [x] Check is restored
+- [x] Tidy is restored
+- [x] autocomplete and API call tips are restored
+- [x] normal unclosed-string assistance is restored
+- [x] brace matching is restored
+- [x] student import policy remains enforced
+- [x] setting `MU_BUILD_PROFILE=Exam` at runtime does not alter the packaged Teaching profile
 
 ### Application
 
@@ -757,6 +832,28 @@ For release or deployment testing, the packaged application should also be teste
 - [ ] Reopen saved file
 - [ ] Normal editor operations
 
+### Exam profile
+
+- [ ] Check unavailable
+- [ ] Tidy unavailable
+- [ ] F2/F10 routes unavailable
+- [ ] autocomplete unavailable
+- [ ] API call tips unavailable
+- [ ] unclosed-string visual assistance suppressed
+- [ ] brace-matching assistance disabled
+- [ ] runtime `MU_BUILD_PROFILE=Teaching` does not alter the profile
+
+### Teaching profile
+
+- [ ] Check available
+- [ ] Tidy available
+- [ ] F2/F10 routes available
+- [ ] autocomplete available
+- [ ] API call tips available
+- [ ] normal unclosed-string assistance restored
+- [ ] brace matching restored
+- [ ] runtime `MU_BUILD_PROFILE=Exam` does not alter the profile
+
 ### Python runtime
 
 - [ ] Mu creates a fresh per-user Python 3.15 runtime
@@ -827,23 +924,7 @@ Doc\
 
 excluded from the bundled Python runtime.
 
-This reduced the bundled Python installation from approximately:
-
-```text
-185.05 MB
-```
-
-to approximately:
-
-```text
-106.32 MB
-```
-
-for a saving of approximately:
-
-```text
-78.73 MB
-```
+This reduced the bundled Python installation from approximately 185.05 MB to approximately 106.32 MB, for a saving of approximately 78.73 MB.
 
 Further aggressive trimming has deliberately been stopped.
 
@@ -867,50 +948,16 @@ Do not switch to Python's embeddable distribution without separate controlled va
 After each individual payload reduction:
 
 1. Perform a clean PyInstaller build.
-2. Verify:
-
-   ```text
-   dist\mu\mu.exe
-   ```
-
-3. Verify:
-
-   ```powershell
-   .\dist\mu\_internal\python-runtime\python.exe --version
-   ```
-
-   returns:
-
-   ```text
-   Python 3.15.0
-   ```
-
-4. Remove or rename the existing per-user Mu runtime so that the packaged application cannot reuse it:
-
-   ```text
-   %LOCALAPPDATA%\python\mu
-   ```
-
+2. Verify `dist\mu\mu.exe` exists.
+3. Verify `dist\mu\_internal\python-runtime\python.exe --version` returns Python 3.15.0.
+4. Remove or rename the existing per-user Mu runtime so the packaged application cannot reuse it.
 5. Launch packaged Mu.
 6. Verify fresh managed-runtime provisioning completes.
 7. Verify normal Python execution.
 8. Verify the student import policy is provisioned.
 9. Verify allowed and blocked imports.
-10. Verify Debugger:
-    - launch;
-    - breakpoint;
-    - Step;
-    - Continue;
-    - policy enforcement;
-    - termination.
-11. Verify REPL:
-    - open;
-    - `2+2` returns `4`;
-    - permitted import;
-    - prohibited import;
-    - close;
-    - reopen;
-    - execute successfully.
+10. Verify Debugger launch, breakpoint, Step, Continue, policy enforcement and termination.
+11. Verify REPL open, execution, permitted/prohibited imports, close and reopen.
 12. Exit Mu with the REPL active.
 13. Record any QThread warning. Do not change lifecycle code unless the behaviour becomes reproducible.
 
@@ -948,6 +995,18 @@ Warnings should be investigated when they correlate with reproducible applicatio
 
 ## Clean rebuild
 
+The supported clean build remains the profile-aware preparation script:
+
+```powershell
+.\package\prepare-pyinstaller.ps1
+```
+
+or:
+
+```powershell
+.\package\prepare-pyinstaller.ps1 -BuildProfile Teaching
+```
+
 Before rebuilding, ensure no previous packaged Mu process or associated managed Python process is keeping files in `dist` open.
 
 Check:
@@ -957,22 +1016,9 @@ Get-Process mu, python, pythonw -ErrorAction SilentlyContinue |
     Select-Object Id, ProcessName, Path
 ```
 
-Then clean:
+Do not indiscriminately terminate unrelated Python processes.
 
-```powershell
-Remove-Item .\build -Recurse -Force -ErrorAction SilentlyContinue
-Remove-Item .\dist -Recurse -Force -ErrorAction SilentlyContinue
-```
-
-Confirm both directories are absent before starting PyInstaller.
-
-Continue to use PyInstaller's:
-
-```text
---clean
-```
-
-option so stale analysis data does not obscure packaging changes.
+The build continues to use PyInstaller's `--clean` option so stale analysis data does not obscure packaging changes.
 
 ---
 
@@ -984,6 +1030,9 @@ Track:
 package\pyinstaller.spec
 package\prepare-pyinstaller.ps1
 package\PYINSTALLER_BUILD.md
+package\BUILD_AND_RELEASE.md
+docs\PROJECT_STATUS.md
+docs\EXAM_TEACHING_PROFILES.md
 mu\student_policy.py
 tests\test_student_policy.py
 ```
@@ -996,6 +1045,7 @@ build\
 dist\
 __pycache__\
 *.pyc
+debug.log
 ```
 
 Generated Mu runtime wheel archives should not be committed unless repository policy is deliberately changed.
@@ -1010,13 +1060,14 @@ They do not independently prove that the resulting Mu application is ready for d
 
 The Windows build should only be considered validated after the applicable source and packaged application validation matrices pass.
 
-Runtime payload optimisation must preserve:
+Runtime payload optimisation and profile changes must preserve:
 
 - Python 3.15 managed-runtime provisioning;
 - Run;
 - Debug;
 - REPL;
-- student import-policy behaviour;
+- mandatory student import-policy behaviour;
+- packaged profile immutability;
 - clean shutdown.
 
-The current one-directory Python 3.15 architecture with the curriculum import allow-list is the known-good baseline.
+The current one-directory Python 3.15 architecture with the curriculum import allow-list and Exam/Teaching profile mechanism is the known-good baseline.

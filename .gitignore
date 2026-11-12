@@ -96,3 +96,5 @@ target/
 venv-pup/
 /local-scripts
 /mu/wheels/*.zip
+
+debug.log
