@@ -11,6 +11,7 @@ below to console=False for the production GUI build.
 
 import sys
 from pathlib import Path
+import os
 from PyInstaller.utils.hooks import (
     collect_data_files,
     collect_submodules,
@@ -18,6 +19,25 @@ from PyInstaller.utils.hooks import (
 )
 
 ROOT = Path(SPECPATH).resolve().parent
+
+# Build profile is supplied by the packaging script.
+# Only supported educational profiles are accepted.
+build_profile = os.environ.get("MU_BUILD_PROFILE", "Exam")
+
+if build_profile not in ("Exam", "Teaching"):
+    build_profile = "Exam"
+
+# Generate a PyInstaller runtime hook containing the selected profile.
+# This makes the selection part of the packaged application rather than
+# something controlled by the user's runtime environment.
+runtime_hook = ROOT / "build" / "mu_build_profile_hook.py"
+runtime_hook.parent.mkdir(parents=True, exist_ok=True)
+
+runtime_hook.write_text(
+    "import sys\n"
+    f"sys._mu_build_profile = {build_profile!r}\n",
+    encoding="utf-8",
+)
 
 # Mu keeps runtime assets under the Python package, including resources,
 # translations and bundled wheels. collect_data_files preserves their paths.
@@ -107,7 +127,7 @@ a = Analysis(
     hiddenimports=sorted(set(hiddenimports)),
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=[str(runtime_hook)],
     excludes=[
         "pytest",
         "sphinx",
