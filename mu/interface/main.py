@@ -70,6 +70,8 @@ from mu.interface.editor import EditorPane
 from mu.interface.widgets import DeviceSelector
 from mu.interface.workers import PythonAnywhereWorker
 from mu.resources import load_icon, load_pixmap
+from mu.config import ENABLE_CHECK, ENABLE_TIDY
+
 
 
 logger = logging.getLogger(__name__)
@@ -148,12 +150,15 @@ class ButtonBar(QToolBar):
             ),
         )
         self.addSeparator()
-        self.addAction(
-            name="check",
-            display_name=_("Check"),
-            tool_text=_("Check your code for mistakes."),
-        )
-        if sys.version_info[:2] >= (3, 6):
+
+        if ENABLE_CHECK:
+            self.addAction(
+                name="check",
+                display_name=_("Check"),
+                tool_text=_("Check your code for mistakes."),
+            )
+
+        if ENABLE_TIDY and sys.version_info[:2] >= (3, 6):
             self.addAction(
                 name="tidy",
                 display_name=_("Tidy"),
@@ -989,14 +994,21 @@ class Window(QMainWindow):
 
     def set_checker_icon(self, icon):
         """
-        Set the status icon to use on the check button
+        Set the status icon to use on the Check button.
+
+        Examination builds do not create the Check action, so safely return
+        when the action is unavailable.
         """
+        if not ENABLE_CHECK or "check" not in self.button_bar.slots:
+            return
+
         self.button_bar.slots["check"].setIcon(load_icon(icon))
         timer = QTimer()
 
         @timer.timeout.connect
         def reset():
-            self.button_bar.slots["check"].setIcon(load_icon("check"))
+            if "check" in self.button_bar.slots:
+                self.button_bar.slots["check"].setIcon(load_icon("check"))
             timer.stop()
 
         timer.start(500)

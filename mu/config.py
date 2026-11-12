@@ -14,6 +14,17 @@ VENV_DIR = os.path.join(DATA_DIR, VENV_NAME)
 # Maximum line length for using both in Check and Tidy
 MAX_LINE_LENGTH = 88
 
+# Build-time feature controls.
+#
+# These values are deliberately not exposed through Mu's user settings.
+# Systems administrators select the required feature set before packaging
+# the application.
+#
+# Examination builds must set both values to False.
+# Standard builds may set both values to True.
+ENABLE_CHECK = False
+ENABLE_TIDY = False
+
 # The user's home directory.
 HOME_DIRECTORY = os.path.expanduser("~")
 

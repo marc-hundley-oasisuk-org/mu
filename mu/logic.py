@@ -40,7 +40,7 @@ from . import __version__
 from . import i18n
 from .resources import path
 from .debugger.utils import is_breakpoint_line
-from .config import DATA_DIR, VENV_DIR, MAX_LINE_LENGTH
+from .config import DATA_DIR, VENV_DIR, MAX_LINE_LENGTH, ENABLE_CHECK, ENABLE_TIDY
 from . import settings
 from .virtual_environment import venv
 
@@ -1341,7 +1341,15 @@ class Editor(QObject):
         """
         Uses PyFlakes and PyCodeStyle to gather information about potential
         problems with the code in the current tab.
+
+        This feature is unavailable when disabled by the build policy.
         """
+        if not ENABLE_CHECK:
+            logger.warning(
+                "Check was requested but is disabled by the build policy."
+            )
+            return
+
         tab = self._view.current_tab
         if tab is None:
             # There is no active text editor so abort.
@@ -1582,9 +1590,13 @@ class Editor(QObject):
         button_bar.connect("zoom-in", self.zoom_in, "Ctrl++")
         button_bar.connect("zoom-out", self.zoom_out, "Ctrl+-")
         button_bar.connect("theme", self.toggle_theme, "F1")
-        button_bar.connect("check", self.check_code, "F2")
-        if sys.version_info[:2] >= (3, 6):
+
+        if ENABLE_CHECK:
+            button_bar.connect("check", self.check_code, "F2")
+
+        if ENABLE_TIDY and sys.version_info[:2] >= (3, 6):
             button_bar.connect("tidy", self.tidy_code, "F10")
+
         button_bar.connect("help", self.show_help, "Ctrl+H")
         button_bar.connect("quit", self.quit, "Ctrl+Q")
         self._view.status_bar.set_mode(self.modes[mode].name)
@@ -1843,7 +1855,15 @@ class Editor(QObject):
     def tidy_code(self):
         """
         Prettify code with Black.
+
+        This feature is unavailable when disabled by the build policy.
         """
+        if not ENABLE_TIDY:
+            logger.warning(
+                "Tidy was requested but is disabled by the build policy."
+            )
+            return
+
         tab = self._view.current_tab
         if not tab or sys.version_info[:2] < (3, 6):
             return
