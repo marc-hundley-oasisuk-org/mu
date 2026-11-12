@@ -33,6 +33,16 @@ datas.append(
     )
 )
 
+# The student import policy is copied into Mu's managed Python environment
+# at runtime, so preserve it as a physical source file outside PyInstaller's
+# Python module archive.
+datas.append(
+    (
+        str(ROOT / "mu" / "student_policy.py"),
+        "mu",
+    )
+)
+
 # mu_debug.py runs under Mu's separately managed Python environment.
 # Package the debugger modules it imports as physical source files so
 # they are available via the PYTHONPATH configured by Mu.

@@ -29,6 +29,9 @@ __pycache__/
 *.pyc
 /*.spec
 
+# Release
+/release/
+
 # Bluemix vendored packages
 vendor/
 

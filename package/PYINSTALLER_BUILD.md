@@ -16,6 +16,8 @@ The objective is a reproducible, redistributable Windows build of Mu using Pytho
 
 Python 3.15.0 is mandatory for the current project.
 
+---
+
 ## Current status
 
 PyInstaller successfully produces a Windows one-directory build of Mu under Python 3.15.
@@ -30,29 +32,34 @@ The current packaged application has been functionally validated for:
 
 - application startup;
 - Python 3.15 managed-runtime provisioning;
+- `ensurepip` and pip bootstrap;
 - normal Python execution;
 - debugger launch and connection;
 - debugger breakpoints;
-- debugger step and continue;
+- debugger Step and Continue;
 - REPL startup;
 - REPL execution;
 - REPL close and reopen;
-- clean application shutdown in current follow-up testing.
+- clean application shutdown with an active REPL;
+- student import-policy provisioning;
+- student import-policy enforcement across Run, Debug and REPL.
 
-The current packaging architecture is therefore the known-good baseline for subsequent packaging optimisation work.
+The Python 3.15 and student import-policy architecture is therefore the current known-good Windows packaging baseline.
+
+---
 
 ## Development baseline
 
 The current Windows development baseline uses:
 
 ```text
-Python                 3.15.0
-PyInstaller             6.22.3
-pyinstaller-hooks-contrib 2026.8
-PyQt5                   5.15.11
-ipykernel               7.4.0
-IPython                 9.17.1
-Jupyter QtConsole       5.7.2
+Python                     3.15.0
+PyInstaller                 6.22.3
+pyinstaller-hooks-contrib   2026.8
+PyQt5                       5.15.11
+ipykernel                   7.4.0
+IPython                     9.17.1
+Jupyter QtConsole           5.7.2
 ```
 
 Development also requires:
@@ -65,6 +72,8 @@ Development also requires:
 The repository should be cloned locally rather than copying an existing development environment.
 
 Generated environments and PyInstaller output should not be transferred between development machines.
+
+---
 
 ## Build configuration
 
@@ -89,6 +98,8 @@ build\
 dist\
 ```
 
+---
+
 ## Preparation
 
 Open PowerShell in the repository root.
@@ -105,6 +116,14 @@ Run the preparation script:
 .\package\prepare-pyinstaller.ps1
 ```
 
+The preparation script:
+
+- updates pip, setuptools and wheel;
+- installs Mu into the development environment in editable mode;
+- ensures PyInstaller is installed;
+- checks the exit code of each critical native command;
+- terminates with an error instead of reporting success if a critical preparation command fails.
+
 Before packaging, confirm that Mu starts correctly from source:
 
 ```powershell
@@ -112,6 +131,26 @@ Before packaging, confirm that Mu starts correctly from source:
 ```
 
 Do not proceed with packaging when the source application is known to be failing.
+
+### Packaging metadata
+
+The repository uses:
+
+```text
+README.md
+```
+
+as the project README.
+
+`setup.py` must therefore use `README.md` for the package long description rather than the obsolete root `README.rst` reference.
+
+The long-description content type is:
+
+```text
+text/markdown
+```
+
+---
 
 ## Build
 
@@ -154,6 +193,8 @@ The complete `dist\mu` directory is the distributable application.
 
 Do not copy only `mu.exe` out of this directory. The current PyInstaller build uses the one-directory model and requires supporting files under `dist\mu`.
 
+---
+
 ## Run the packaged application
 
 Launch the packaged application from PowerShell during engineering validation:
@@ -172,6 +213,8 @@ Keeping the console visible during engineering validation allows missing imports
 
 Console mode should not be disabled until release packaging is deliberately addressed.
 
+---
+
 ## Why one-directory
 
 The current build intentionally uses the PyInstaller one-directory model.
@@ -184,11 +227,14 @@ Mu uses components including:
 - Jupyter components;
 - external debugger processes;
 - runtime package provisioning;
-- physical runtime resources.
+- physical runtime resources;
+- the student import-policy deployment artefact.
 
 The one-directory layout makes these components easier to inspect and validate during development.
 
-Do not move to a one-file build while the current packaging architecture is being validated and optimised.
+Do not move to a one-file build while the current packaging architecture is being validated and maintained.
+
+---
 
 ## Packaged Python architecture
 
@@ -234,6 +280,7 @@ dist\
         Lib\
         ...
       mu\
+        student_policy.py
         wheels\
           1.2.2.zip
         mu_debug.py
@@ -244,6 +291,8 @@ dist\
 ```
 
 The exact contents of `python-runtime` may be reduced through controlled optimisation, but the runtime must retain all components required for managed-runtime creation and Mu functionality.
+
+---
 
 ## Bundled Python 3.15 base runtime
 
@@ -277,13 +326,21 @@ It supports:
 - pip bootstrap;
 - creation of Mu's per-user managed runtime.
 
-The current packaging architecture deliberately uses the proven full Python installation as the optimisation baseline rather than switching directly to Python's embeddable distribution.
+The current packaging architecture deliberately uses the proven Python installation as the optimisation baseline rather than switching to Python's embeddable distribution.
+
+The `Doc\` directory has been excluded from the bundled runtime as a validated payload optimisation.
+
+The resulting bundled Python runtime is approximately 106 MB.
+
+Further aggressive runtime trimming is not currently required.
+
+---
 
 ## Managed runtime provisioning
 
 Mu creates a separate per-user Python environment for executing user code.
 
-Runtime provisioning now uses the Python standard-library `venv` module rather than third-party `virtualenv` creation.
+Runtime provisioning uses the Python standard-library `venv` module rather than third-party `virtualenv` creation.
 
 Conceptually, environment creation is:
 
@@ -310,11 +367,13 @@ This distinction is required because frozen `mu.exe` cannot act as the Python in
 
 Do not revert managed-runtime creation to running `virtualenv` through `sys.executable`.
 
+---
+
 ## Managed runtime validation
 
 A packaged Mu application must not be validated solely by checking that its user interface launches.
 
-The first clean launch must be tested without an existing Mu per-user runtime so that the packaged Python base is exercised.
+The first clean launch should be tested without an existing Mu per-user runtime so that the packaged Python base is exercised.
 
 Runtime provisioning includes:
 
@@ -323,7 +382,9 @@ Runtime provisioning includes:
 - bootstrapping pip;
 - installing Mu baseline packages;
 - installing required runtime packages;
-- registering the Jupyter kernel used by the REPL.
+- registering the Jupyter kernel used by the REPL;
+- provisioning the student import policy;
+- provisioning the student-policy `sitecustomize.py` bootstrap.
 
 Following provisioning:
 
@@ -334,6 +395,8 @@ print(sys.executable)
 ```
 
 must show Python 3.15 and the Mu-managed per-user runtime rather than `mu.exe` or the development virtual environment.
+
+---
 
 ## Jupyter and REPL packaging
 
@@ -387,6 +450,8 @@ The packaged distribution is expected to contain the corresponding Jupyter Clien
 
 This is required for packaged REPL operation.
 
+---
+
 ## Debugger packaging
 
 The Mu debugger is deliberately launched using Mu's managed Python interpreter and physical Python source files.
@@ -413,6 +478,145 @@ mu_debug.py
 
 Do not add additional debugger modules solely on the assumption that the entire package must exist physically. Add further files only when runtime evidence establishes that they are required.
 
+---
+
+## Student import policy
+
+Mu includes a curriculum-focused import allow-list for student Python execution.
+
+The permitted direct student imports are:
+
+```text
+math
+random
+time
+turtle
+```
+
+The policy applies consistently to:
+
+- Run;
+- Debug;
+- REPL.
+
+### Policy architecture
+
+The authoritative implementation is:
+
+```text
+mu\student_policy.py
+```
+
+The PyInstaller distribution must retain this as a physical data file.
+
+`package\pyinstaller.spec` therefore explicitly includes:
+
+```text
+mu\student_policy.py
+```
+
+Expected packaged location:
+
+```text
+dist\mu\_internal\mu\student_policy.py
+```
+
+During managed-environment creation or validation, Mu determines the managed interpreter's `purelib` location and provisions:
+
+```text
+Lib\site-packages\mu_student_policy.py
+Lib\site-packages\sitecustomize.py
+```
+
+`sitecustomize.py` installs the import hook when the managed interpreter starts.
+
+The hook exists independently from policy activation.
+
+Enforcement occurs only when:
+
+```text
+MU_STUDENT_IMPORT_POLICY=1
+```
+
+The variable is applied specifically to student:
+
+- Run;
+- Debug;
+- REPL.
+
+Runtime provisioning, `ensurepip`, pip operations, baseline package installation, baseline package validation and Jupyter kernel registration remain unrestricted.
+
+### Student versus dependency imports
+
+The policy distinguishes between imports initiated directly by student code and imports required internally by permitted modules or Mu infrastructure.
+
+For example:
+
+```text
+student code
+    |
+    +-- import turtle          ALLOWED
+            |
+            +-- tkinter       INTERNAL - ALLOWED
+            +-- pathlib       INTERNAL - ALLOWED
+            +-- os            INTERNAL - ALLOWED
+            +-- sys           INTERNAL - ALLOWED
+```
+
+while:
+
+```text
+student code
+    |
+    +-- import os              BLOCKED
+```
+
+This distinction is required because permitted modules such as `turtle` have legitimate dependencies that are not themselves on the student allow-list.
+
+### Supported restriction forms
+
+The policy blocks prohibited modules through ordinary imports:
+
+```python
+import os
+```
+
+from-import syntax:
+
+```python
+from os import path
+```
+
+and explicit dynamic imports:
+
+```python
+__import__("socket")
+```
+
+### Packaged policy integrity
+
+The following policy copies have been validated as content-equivalent:
+
+```text
+mu\student_policy.py
+dist\mu\_internal\mu\student_policy.py
+<managed purelib>\mu_student_policy.py
+```
+
+Raw file hashes may differ when Windows text-mode processing changes line-ending representation.
+
+Normalised file content has been confirmed identical.
+
+### Security scope
+
+The import policy is a curriculum restriction and defence-in-depth control.
+
+It is not a complete Python security sandbox.
+
+Endpoint security must continue to rely on the Windows device configuration, user permissions, application controls, endpoint protection and network controls.
+
+---
+
 ## Critical packaged assets
 
 The current known-good distribution requires the following critical assets:
@@ -421,6 +625,7 @@ The current known-good distribution requires the following critical assets:
 dist\mu\mu.exe
 dist\mu\_internal\python-runtime\python.exe
 dist\mu\_internal\mu\wheels\1.2.2.zip
+dist\mu\_internal\mu\student_policy.py
 dist\mu\_internal\mu\mu_debug.py
 dist\mu\_internal\mu\debugger\config.py
 dist\mu\_internal\mu\debugger\runner.py
@@ -428,6 +633,8 @@ dist\mu\_internal\mu\debugger\utils.py
 ```
 
 Their presence should be checked when packaging changes affect PyInstaller data collection or the runtime payload.
+
+---
 
 ## Current packaged validation
 
@@ -446,11 +653,18 @@ The current Python 3.15 packaged architecture has passed the following functiona
 - [x] `ensurepip` works
 - [x] pip works
 - [x] Baseline/runtime packages install
+- [x] Student-policy runtime files are provisioned
 
 ### Run
 
 - [x] Normal Python program executes successfully
 - [x] `sys.executable` resolves to Mu's per-user runtime
+- [x] `math` permitted
+- [x] `random` permitted
+- [x] `time` permitted
+- [x] `turtle` permitted
+- [x] Prohibited direct imports rejected
+- [x] Policy remains active for the interactive Python prompt following Run
 
 ### Debugger
 
@@ -460,6 +674,8 @@ The current Python 3.15 packaged architecture has passed the following functiona
 - [x] Step works
 - [x] Continue works
 - [x] Program output is correct
+- [x] Allowed curriculum imports operate
+- [x] Prohibited student imports are rejected
 - [x] Debugger finishes normally
 
 ### REPL
@@ -468,13 +684,15 @@ The current Python 3.15 packaged architecture has passed the following functiona
 - [x] Python expression execution works
 - [x] `2+2` returns `4`
 - [x] Python version reports 3.15.0
+- [x] Allowed curriculum imports operate
+- [x] Prohibited student imports are rejected
 - [x] REPL closes
 - [x] REPL reopens
 - [x] Reopened REPL executes successfully
 
 ### Shutdown
 
-Current controlled follow-up tests have passed:
+Controlled follow-up tests have passed:
 
 - [x] Exit with REPL already closed
 - [x] Exit with REPL active
@@ -492,6 +710,30 @@ The warning did not reproduce during subsequent controlled tests with either a c
 It is therefore currently recorded as an intermittent observation rather than a reproducible packaging or lifecycle defect.
 
 Do not change the existing QThread lifecycle implementation without new reproducible evidence.
+
+---
+
+## Student import-policy validation matrix
+
+For policy-related release testing, validate all three student execution paths.
+
+| Module / behaviour | Run | Debug | REPL |
+|---|---|---|---|
+| `math` | PASS | PASS | PASS |
+| `random` | PASS | PASS | PASS |
+| `time` | PASS | PASS | PASS |
+| `turtle` | PASS | PASS | PASS |
+| `os` | BLOCK | BLOCK | BLOCK |
+| `socket` | BLOCK | BLOCK | BLOCK |
+| `pathlib` | BLOCK | BLOCK | BLOCK |
+| `subprocess` | BLOCK | BLOCK | BLOCK |
+| prohibited `from ... import ...` | BLOCK | BLOCK | BLOCK |
+| prohibited `__import__()` | BLOCK | BLOCK | BLOCK |
+| permitted transitive dependencies | PASS | PASS | PASS |
+
+When maintaining the policy, test both source Mu and the packaged application.
+
+---
 
 ## Full validation checklist
 
@@ -522,8 +764,25 @@ For release or deployment testing, the packaged application should also be teste
 - [ ] `ensurepip` succeeds
 - [ ] Runtime pip is functional
 - [ ] Baseline packages install
+- [ ] Student-policy runtime files are provisioned
 - [ ] Simple Python program executes
 - [ ] `sys.executable` points to the intended Mu runtime
+
+### Student import policy
+
+- [ ] `math` permitted in Run
+- [ ] `random` permitted in Run
+- [ ] `time` permitted in Run
+- [ ] `turtle` permitted in Run
+- [ ] `os` rejected in Run
+- [ ] `socket` rejected in Run
+- [ ] `pathlib` rejected in Run
+- [ ] `subprocess` rejected in Run
+- [ ] prohibited `from ... import ...` rejected
+- [ ] prohibited `__import__()` rejected
+- [ ] allowed module dependencies continue to operate
+- [ ] equivalent behaviour confirmed in Debug
+- [ ] equivalent behaviour confirmed in REPL
 
 ### REPL
 
@@ -552,21 +811,43 @@ For release or deployment testing, the packaged application should also be teste
 - [ ] AppLocker behaviour is validated if applicable
 - [ ] No development virtual environment is required on the target device
 
+---
+
 ## Runtime payload optimisation
 
 The bundled Python 3.15 installation is a known-good runtime provisioning baseline.
 
 Payload optimisation must therefore proceed incrementally rather than replacing the runtime architecture.
 
-Only one runtime component should initially be removed or excluded at a time.
-
-After each change, perform a clean build and execute the complete runtime validation matrix before considering another exclusion.
-
-The first optimisation candidate is:
+The following optimisation has been completed:
 
 ```text
 Doc\
 ```
+
+excluded from the bundled Python runtime.
+
+This reduced the bundled Python installation from approximately:
+
+```text
+185.05 MB
+```
+
+to approximately:
+
+```text
+106.32 MB
+```
+
+for a saving of approximately:
+
+```text
+78.73 MB
+```
+
+Further aggressive trimming has deliberately been stopped.
+
+Although `Lib\test` remains comparatively large, removing further components from the known-good Python installation is not currently justified by a deployment requirement.
 
 Do not initially remove or substantially reduce:
 
@@ -613,22 +894,29 @@ After each individual payload reduction:
 5. Launch packaged Mu.
 6. Verify fresh managed-runtime provisioning completes.
 7. Verify normal Python execution.
-8. Verify debugger:
-   - launch;
-   - breakpoint;
-   - step;
-   - continue;
-   - termination.
-9. Verify REPL:
-   - open;
-   - `2+2` returns `4`;
-   - close;
-   - reopen;
-   - `2+2` returns `4`.
-10. Exit Mu with the REPL active.
-11. Record any QThread warning. Do not change lifecycle code unless the behaviour becomes reproducible.
+8. Verify the student import policy is provisioned.
+9. Verify allowed and blocked imports.
+10. Verify Debugger:
+    - launch;
+    - breakpoint;
+    - Step;
+    - Continue;
+    - policy enforcement;
+    - termination.
+11. Verify REPL:
+    - open;
+    - `2+2` returns `4`;
+    - permitted import;
+    - prohibited import;
+    - close;
+    - reopen;
+    - execute successfully.
+12. Exit Mu with the REPL active.
+13. Record any QThread warning. Do not change lifecycle code unless the behaviour becomes reproducible.
 
 Only after this matrix passes should another Python-runtime component be considered for removal.
+
+---
 
 ## Known non-blocking build warnings
 
@@ -644,7 +932,7 @@ because importing `mu.interface` raises:
 NameError: name '_' is not defined
 ```
 
-The current packaged application has nevertheless passed Run, Debugger and REPL validation.
+The current packaged application has nevertheless passed Run, Debugger, REPL and student-policy validation.
 
 Do not change application code solely to remove this warning without evidence of a corresponding functional failure.
 
@@ -655,6 +943,8 @@ These have not prevented successful packaging.
 Do not treat every entry in `warn-pyinstaller.txt` as evidence of a missing runtime dependency.
 
 Warnings should be investigated when they correlate with reproducible application behaviour.
+
+---
 
 ## Clean rebuild
 
@@ -684,6 +974,8 @@ Continue to use PyInstaller's:
 
 option so stale analysis data does not obscure packaging changes.
 
+---
+
 ## Repository policy
 
 Track:
@@ -692,6 +984,8 @@ Track:
 package\pyinstaller.spec
 package\prepare-pyinstaller.ps1
 package\PYINSTALLER_BUILD.md
+mu\student_policy.py
+tests\test_student_policy.py
 ```
 
 Do not track generated content such as:
@@ -706,6 +1000,8 @@ __pycache__\
 
 Generated Mu runtime wheel archives should not be committed unless repository policy is deliberately changed.
 
+---
+
 ## Release principle
 
 Successful PyInstaller `EXE` and `COLLECT` stages prove that packaging completed.
@@ -714,6 +1010,13 @@ They do not independently prove that the resulting Mu application is ready for d
 
 The Windows build should only be considered validated after the applicable source and packaged application validation matrices pass.
 
-Runtime payload optimisation must preserve the validated application behaviour.
+Runtime payload optimisation must preserve:
 
-The current one-directory Python 3.15 architecture is the known-good baseline.
+- Python 3.15 managed-runtime provisioning;
+- Run;
+- Debug;
+- REPL;
+- student import-policy behaviour;
+- clean shutdown.
+
+The current one-directory Python 3.15 architecture with the curriculum import allow-list is the known-good baseline.

@@ -24,6 +24,7 @@ from mu.modes.api import PYTHON3_APIS, SHARED_APIS, PI_APIS
 from mu.resources import load_icon
 from mu.interface.panes import CHARTS
 from ..virtual_environment import venv
+from ..student_policy import POLICY_ENV_VAR
 from qtconsole.manager import QtKernelManager
 from qtconsole.client import QtKernelClient
 from PyQt5.QtCore import QObject, QThread, Qt, pyqtSignal
@@ -227,7 +228,8 @@ class PythonMode(BaseMode):
             # If needed, save the script.
             if tab.isModified():
                 self.editor.save_tab_to_file(tab)
-            envars = self.editor.envars
+            envars = dict(self.editor.envars)
+            envars[POLICY_ENV_VAR] = "1"
             cwd = os.path.dirname(tab.path)
             logger.info(
                 "About to run script: %s",
@@ -299,10 +301,12 @@ class PythonMode(BaseMode):
         """
         self.set_buttons(repl=False)
         self.kernel_thread = QThread()
+        envars = dict(self.editor.envars)
+        envars[POLICY_ENV_VAR] = "1"
         self.kernel_runner = KernelRunner(
             kernel_name=venv.name,
             cwd=self.workspace_dir(),
-            envars=self.editor.envars,
+            envars=envars,
         )
         self.kernel_runner.moveToThread(self.kernel_thread)
         self.kernel_runner.kernel_started.connect(self.on_kernel_start)

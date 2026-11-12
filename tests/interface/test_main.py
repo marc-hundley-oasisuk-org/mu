@@ -86,10 +86,18 @@ def test_ButtonBar_change_mode():
         mock_reset.reset_mock()
         b.change_mode(mock_mode)
         mock_reset.assert_called_once_with()
-        if sys.version_info < (3, 6):
-            assert mock_add_action.call_count == 11
-        else:
-            assert mock_add_action.call_count == 12
+        expected_actions = 10
+
+        if mu.interface.main.ENABLE_CHECK:
+            expected_actions += 1
+
+        if (
+            mu.interface.main.ENABLE_TIDY
+            and sys.version_info[:2] >= (3, 6)
+        ):
+            expected_actions += 1
+
+        assert mock_add_action.call_count == expected_actions
         assert mock_add_separator.call_count == 5
 
 
@@ -1543,7 +1551,11 @@ def test_Window_set_checker_icon():
     mock_timer.timeout = DumSig()
     mock_timer_class = mock.MagicMock(return_value=mock_timer)
     mock_load_icon = mock.MagicMock()
-    with mock.patch("mu.interface.main.QTimer", mock_timer_class), mock.patch(
+    with mock.patch(
+        "mu.interface.main.ENABLE_CHECK", True
+    ), mock.patch(
+        "mu.interface.main.QTimer", mock_timer_class
+    ), mock.patch(
         "mu.interface.main.load_icon", mock_load_icon
     ):
         w.set_checker_icon("check-good")
@@ -1556,6 +1568,25 @@ def test_Window_set_checker_icon():
         [mock.call("check-good"), mock.call("check")]
     )
     assert w.button_bar.slots["check"].setIcon.call_count == 2
+
+
+def test_Window_set_checker_icon_when_check_disabled():
+    """
+    No Check icon update is attempted when Check is disabled.
+    """
+    w = mu.interface.main.Window()
+    w.button_bar = mock.MagicMock()
+    w.button_bar.slots = {}
+
+    with mock.patch("mu.interface.main.ENABLE_CHECK", False), mock.patch(
+        "mu.interface.main.QTimer"
+    ) as mock_timer_class, mock.patch(
+        "mu.interface.main.load_icon"
+    ) as mock_load_icon:
+        w.set_checker_icon("check-good")
+
+    mock_timer_class.assert_not_called()
+    mock_load_icon.assert_not_called()
 
 
 def test_Window_show_admin():

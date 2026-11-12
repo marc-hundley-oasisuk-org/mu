@@ -10,8 +10,19 @@ if (-not (Test-Path ".venv\Scripts\python.exe")) {
 $Python = Join-Path $RepoRoot ".venv\Scripts\python.exe"
 
 & $Python -m pip install --upgrade pip setuptools wheel
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to prepare pip, setuptools and wheel."
+}
+
 & $Python -m pip install -e "."
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to install Mu into the build environment."
+}
+
 & $Python -m pip install pyinstaller
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to install PyInstaller."
+}
 
 # Confirm the source application starts before packaging.
 Write-Host "Environment prepared. Test the source application with:" -ForegroundColor Cyan

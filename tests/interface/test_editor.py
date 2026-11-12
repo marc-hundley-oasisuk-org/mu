@@ -249,12 +249,100 @@ def test_EditorPane_set_theme():
     ep.lexer = mock.MagicMock()
     mock_api = mock.MagicMock()
     with mock.patch(
+        "mu.interface.editor.ENABLE_CODE_ASSIST", True
+    ), mock.patch(
         "mu.interface.editor.QsciAPIs", return_value=mock_api
     ) as mapi:
         ep.set_api(api)
         mapi.assert_called_once_with(ep.lexer)
         mock_api.add.assert_called_once_with("api help text")
         mock_api.prepare.assert_called_once_with()
+
+
+def test_EditorPane_set_api_disabled_by_build_policy():
+    """
+    API assistance is not configured when disabled by the build policy.
+    """
+    api = ["api help text"]
+    ep = mu.interface.editor.EditorPane("/foo/bar.py", "baz")
+    ep.lexer = mock.MagicMock()
+    ep.setAutoCompletionThreshold = mock.MagicMock()
+    ep.setAutoCompletionSource = mock.MagicMock()
+
+    with mock.patch(
+        "mu.interface.editor.ENABLE_CODE_ASSIST", False
+    ), mock.patch(
+        "mu.interface.editor.QsciAPIs"
+    ) as mock_api_class:
+        ep.set_api(api)
+
+    assert ep.api is None
+    mock_api_class.assert_not_called()
+    ep.setAutoCompletionThreshold.assert_called_once_with(-1)
+    ep.setAutoCompletionSource.assert_called_once_with(
+        mu.interface.editor.QsciScintilla.AcsNone
+    )
+
+
+def test_EditorPane_unclosed_string_highlight_disabled_by_build_policy():
+    """
+    Examination builds do not visually identify unclosed Python strings.
+    Normal syntax highlighting remains enabled.
+    """
+    ep = mu.interface.editor.EditorPane("/foo/bar.py", "print('hello)")
+    lexer = ep.lexer
+
+    with mock.patch(
+        "mu.interface.editor.ENABLE_CODE_ASSIST", False
+    ), mock.patch.object(
+        lexer, "setPaper"
+    ) as mock_set_paper, mock.patch.object(
+        lexer, "setEolFill"
+    ) as mock_set_eol_fill:
+        ep.set_theme(mu.interface.themes.DayTheme)
+
+    mock_set_paper.assert_any_call(
+        mu.interface.themes.DayTheme.Paper,
+        lexer.UnclosedString,
+    )
+    mock_set_eol_fill.assert_any_call(
+        False,
+        lexer.UnclosedString,
+    )
+
+
+def test_EditorPane_brace_matching_disabled_by_build_policy():
+    """
+    Examination builds do not provide brace-matching assistance.
+    """
+    with mock.patch(
+        "mu.interface.editor.ENABLE_CODE_ASSIST", False
+    ), mock.patch.object(
+        mu.interface.editor.EditorPane,
+        "setBraceMatching"
+    ) as mock_set_brace_matching:
+        mu.interface.editor.EditorPane("/foo/bar.py", "print(")
+
+    mock_set_brace_matching.assert_called_with(
+        mu.interface.editor.QsciScintilla.NoBraceMatch
+    )
+
+
+def test_EditorPane_brace_matching_enabled_by_build_policy():
+    """
+    Standard builds retain Mu's normal brace-matching assistance.
+    """
+    with mock.patch(
+        "mu.interface.editor.ENABLE_CODE_ASSIST", True
+    ), mock.patch.object(
+        mu.interface.editor.EditorPane,
+        "setBraceMatching"
+    ) as mock_set_brace_matching:
+        mu.interface.editor.EditorPane("/foo/bar.py", "print(")
+
+    mock_set_brace_matching.assert_called_with(
+        mu.interface.editor.QsciScintilla.SloppyBraceMatch
+    )
 
 
 def test_EditorPane_set_zoom():

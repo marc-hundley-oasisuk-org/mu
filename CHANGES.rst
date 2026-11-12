@@ -1,6 +1,25 @@
 Release History
 ---------------
 
+1.3.0
+=====
+
+This release is based on Mu 1.2.2 and represents the first release of the Oasis-maintained fork.
+
+The repository used for this version is :
+
+https://github.com/marc-hundley-oasisuk-org/mu
+
+* Modernised Mu for mandatory Python 3.15.0 support.
+* Added automatic provisioning of the managed Python 3.15 runtime.
+* Updated Run, Debugger and REPL integration for the Python 3.15 runtime.
+* Updated Windows PyInstaller packaging to include the managed Python runtime and required application dependencies.
+* Added a curriculum-focused student import policy for Run, Debug and REPL.
+* Student imports are restricted to the approved modules: math, random, time and turtle.
+* Added packaged-runtime support for the student import policy while preserving imports required by Mu, Jupyter and debugger infrastructure.
+* Improved Windows packaging preparation and validation.
+
+
 1.2.2
 =====
 

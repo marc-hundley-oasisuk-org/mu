@@ -1863,7 +1863,9 @@ def test_check_code_on():
     }
     mock_mode = mock.MagicMock()
     mock_mode.builtins = None
-    with mock.patch("mu.logic.check_flake", return_value=flake), mock.patch(
+    with mock.patch("mu.logic.ENABLE_CHECK", True), mock.patch(
+        "mu.logic.check_flake", return_value=flake
+    ), mock.patch(
         "mu.logic.check_pycodestyle", return_value=pep8
     ):
         ed = mu.logic.Editor(view)
@@ -1892,7 +1894,9 @@ def test_check_code_no_problems():
     pep8 = {}
     mock_mode = mock.MagicMock()
     mock_mode.builtins = None
-    with mock.patch("mu.logic.check_flake", return_value=flake), mock.patch(
+    with mock.patch("mu.logic.ENABLE_CHECK", True), mock.patch(
+        "mu.logic.check_flake", return_value=flake
+    ), mock.patch(
         "mu.logic.check_pycodestyle", return_value=pep8
     ):
         ed = mu.logic.Editor(view)
@@ -1911,7 +1915,8 @@ def test_check_code_off():
     tab.has_annotations = True
     view.current_tab = tab
     ed = mu.logic.Editor(view)
-    ed.check_code()
+    with mock.patch("mu.logic.ENABLE_CHECK", True):
+        ed.check_code()
     assert tab.has_annotations is False
     view.reset_annotations.assert_called_once_with()
 
@@ -1923,7 +1928,8 @@ def test_check_code_no_tab():
     view = mock.MagicMock()
     view.current_tab = None
     ed = mu.logic.Editor(view)
-    ed.check_code()
+    with mock.patch("mu.logic.ENABLE_CHECK", True):
+        ed.check_code()
     assert view.annotate_code.call_count == 0
 
 
@@ -1935,7 +1941,8 @@ def test_check_code_not_python():
     view.current_tab = mock.MagicMock()
     view.current_tab.path = "foo.html"
     ed = mu.logic.Editor(view)
-    ed.check_code()
+    with mock.patch("mu.logic.ENABLE_CHECK", True):
+        ed.check_code()
     assert view.annotate_code.call_count == 0
 
 
@@ -2446,10 +2453,15 @@ def test_change_mode():
     # Check the new mode is set up correctly.
     assert ed.mode == "python"
     view.change_mode.assert_called_once_with(mode)
-    if sys.version_info < (3, 6):
-        assert mock_button_bar.connect.call_count == 11
-    else:
-        assert mock_button_bar.connect.call_count == 12
+    expected_connections = 10
+
+    if mu.logic.ENABLE_CHECK:
+        expected_connections += 1
+
+    if mu.logic.ENABLE_TIDY and sys.version_info[:2] >= (3, 6):
+        expected_connections += 1
+
+    assert mock_button_bar.connect.call_count == expected_connections
     view.status_bar.set_mode.assert_called_once_with("Python")
     view.set_timer.assert_called_once_with(5, ed.autosave)
 
@@ -2474,10 +2486,15 @@ def test_change_mode_no_timer():
     ed.change_mode("python")
     assert ed.mode == "python"
     view.change_mode.assert_called_once_with(mode)
-    if sys.version_info < (3, 6):
-        assert mock_button_bar.connect.call_count == 11
-    else:
-        assert mock_button_bar.connect.call_count == 12
+    expected_connections = 10
+
+    if mu.logic.ENABLE_CHECK:
+        expected_connections += 1
+
+    if mu.logic.ENABLE_TIDY and sys.version_info[:2] >= (3, 6):
+        expected_connections += 1
+
+    assert mock_button_bar.connect.call_count == expected_connections
     view.status_bar.set_mode.assert_called_once_with("Python")
     view.stop_timer.assert_called_once_with()
 
@@ -3395,8 +3412,44 @@ def test_tidy_code_no_tab():
     mock_view.current_tab = None
     ed = mu.logic.Editor(mock_view)
     ed.show_status_message = mock.MagicMock()
-    ed.tidy_code()
+
+    with mock.patch("mu.logic.ENABLE_TIDY", True):
+        ed.tidy_code()
+
     assert ed.show_status_message.call_count == 0
+
+
+def test_check_code_disabled_by_build_policy():
+    """
+    Check does nothing when disabled by the build policy.
+    """
+    mock_view = mock.MagicMock()
+    ed = mu.logic.Editor(mock_view)
+
+    with mock.patch("mu.logic.ENABLE_CHECK", False):
+        ed.check_code()
+
+    mock_view.reset_annotations.assert_not_called()
+    mock_view.annotate_code.assert_not_called()
+    mock_view.show_annotations.assert_not_called()
+    mock_view.set_checker_icon.assert_not_called()
+
+
+@pytest.mark.skipif(sys.version_info < (3, 6), reason="Requires Python3.6")
+def test_tidy_code_disabled_by_build_policy():
+    """
+    Tidy does not inspect or modify code when disabled by the build policy.
+    """
+    mock_view = mock.MagicMock()
+    mock_tab = mock_view.current_tab
+    ed = mu.logic.Editor(mock_view)
+
+    with mock.patch("mu.logic.ENABLE_TIDY", False):
+        ed.tidy_code()
+
+    mock_tab.text.assert_not_called()
+    mock_tab.SendScintilla.assert_not_called()
+    mock_view.show_message.assert_not_called()
 
 
 @pytest.mark.skipif(sys.version_info < (3, 6), reason="Requires Python3.6")
@@ -3409,7 +3462,8 @@ def test_tidy_code_not_python():
     mock_view.current_tab.path = "foo.html"
     ed = mu.logic.Editor(mock_view)
     ed.show_status_message = mock.MagicMock()
-    ed.tidy_code()
+    with mock.patch("mu.logic.ENABLE_TIDY", True):
+        ed.tidy_code()
     assert ed.show_status_message.call_count == 0
 
 
@@ -3423,7 +3477,8 @@ def test_tidy_code_valid_python():
     mock_view.current_tab.text.return_value = "print('hello')"
     ed = mu.logic.Editor(mock_view)
     ed.show_status_message = mock.MagicMock()
-    ed.tidy_code()
+    with mock.patch("mu.logic.ENABLE_TIDY", True):
+        ed.tidy_code()
     tab = mock_view.current_tab
     tab.SendScintilla.assert_called_once_with(
         tab.SCI_SETTEXT, b'print("hello")\n'
@@ -3440,7 +3495,8 @@ def test_tidy_code_invalid_python():
     mock_view = mock.MagicMock()
     mock_view.current_tab.text.return_value = "print('hello'"
     ed = mu.logic.Editor(mock_view)
-    ed.tidy_code()
+    with mock.patch("mu.logic.ENABLE_TIDY", True):
+        ed.tidy_code()
     assert mock_view.show_message.call_count == 1
 
 
@@ -3457,7 +3513,8 @@ def test_check_tidy_check_line_too_long():
     ed = mu.logic.Editor(mock_view)
     too_long = mu.logic.check_pycodestyle(tab.text.return_value)
     assert len(too_long) == 1  # One issue found: line too long
-    ed.tidy_code()
+    with mock.patch("mu.logic.ENABLE_TIDY", True):
+        ed.tidy_code()
     called_with = tab.SendScintilla.call_args[0][1].decode()
     tab.text.return_value = called_with
     ok = mu.logic.check_pycodestyle(tab.text.return_value)
@@ -3493,7 +3550,9 @@ def test_check_tidy_check_short_line():
     long_list = "[{}{}]\n".format(*("(1, 2), " * 10, '"0123456789"'))
     tab = mock_view.current_tab
     tab.text.return_value = long_list
-    with mock.patch("mu.logic.MAX_LINE_LENGTH", 94):
+    with mock.patch("mu.logic.MAX_LINE_LENGTH", 94), mock.patch(
+        "mu.logic.ENABLE_TIDY", True
+    ):
         ed = mu.logic.Editor(mock_view)
         too_long = mu.logic.check_pycodestyle(tab.text.return_value)
         assert len(too_long) == 0  # No issues
