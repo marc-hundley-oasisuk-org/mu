@@ -24,6 +24,7 @@ MAX_LINE_LENGTH = 88
 # Standard builds may set both values to True.
 ENABLE_CHECK = False
 ENABLE_TIDY = False
+ENABLE_CODE_ASSIST = False
 
 # The user's home directory.
 HOME_DIRECTORY = os.path.expanduser("~")

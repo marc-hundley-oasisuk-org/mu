@@ -33,6 +33,7 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import QApplication
 from mu.interface.themes import Font, DayTheme
 from mu.logic import NEWLINE
+from mu.config import ENABLE_CODE_ASSIST
 
 
 # Regular Expression for valid individual code 'words'
@@ -51,6 +52,19 @@ class PythonLexer(QsciLexerPython):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.setHighlightSubidentifiers(False)
+
+    def paper(self, style):
+        """
+        Return the background colour for a lexer style.
+
+        Examination builds suppress the special background used by QScintilla
+        to identify unclosed strings while retaining normal syntax colouring.
+        """
+        if not ENABLE_CODE_ASSIST and style == self.UnclosedString:
+            return self.defaultPaper(style)
+
+        return super().paper(style)
+
 
     def keywords(self, flag):
         """
@@ -192,7 +206,10 @@ class EditorPane(QsciScintilla):
         self.setEdgeColumn(79)
         self.setMarginLineNumbers(0, True)
         self.setMarginWidth(0, 50)
-        self.setBraceMatching(QsciScintilla.SloppyBraceMatch)
+        if ENABLE_CODE_ASSIST:
+            self.setBraceMatching(QsciScintilla.SloppyBraceMatch)
+        else:
+            self.setBraceMatching(QsciScintilla.NoBraceMatch)
         self.SendScintilla(QsciScintilla.SCI_SETHSCROLLBAR, 0)
         self.set_theme()
         # Markers and indicators
@@ -258,9 +275,30 @@ class EditorPane(QsciScintilla):
         self.setMarkerBackgroundColor(
             theme.BreakpointMarker, self.BREAKPOINT_MARKER
         )
-        self.setAutoCompletionThreshold(2)
-        self.setAutoCompletionSource(QsciScintilla.AcsAll)
+        if ENABLE_CODE_ASSIST:
+            self.setAutoCompletionThreshold(2)
+            self.setAutoCompletionSource(QsciScintilla.AcsAll)
+        else:
+            self.setAutoCompletionThreshold(-1)
+            self.setAutoCompletionSource(QsciScintilla.AcsNone)
+
         self.setLexer(self.lexer)
+        # QScintilla normally highlights an unclosed Python string with a
+        # special background colour extending to the end of the line.
+        # Examination builds suppress this visual error assistance while
+        # retaining normal syntax highlighting.
+        if (
+            not ENABLE_CODE_ASSIST
+            and isinstance(self.lexer, PythonLexer)
+        ):
+            self.lexer.setPaper(
+                theme.Paper,
+                self.lexer.UnclosedString,
+            )
+            self.lexer.setEolFill(
+                False,
+                self.lexer.UnclosedString,
+            )
         self.setMarginsBackgroundColor(theme.Margin)
         self.setMarginsForegroundColor(theme.Caret)
         self.setMatchedBraceBackgroundColor(theme.BraceBackground)
@@ -270,8 +308,16 @@ class EditorPane(QsciScintilla):
 
     def set_api(self, api_definitions):
         """
-        Sets the API entries for tooltips, calltips and the like.
+        Set the API entries used for autocomplete and call tips.
+
+        Examination builds do not attach API assistance data to the editor.
         """
+        if not ENABLE_CODE_ASSIST:
+            self.api = None
+            self.setAutoCompletionThreshold(-1)
+            self.setAutoCompletionSource(QsciScintilla.AcsNone)
+            return
+
         self.api = QsciAPIs(self.lexer)
         for entry in api_definitions:
             self.api.add(entry)
